@@ -1,0 +1,14 @@
+
+#######################################################
+#             GEMINI_OCR OCR API CALL LOG             #
+#      Game-Changing Translator - OCR Analysis        #
+#######################################################
+
+Logging Started: 2026-09-22 15:20:47.061
+Purpose: Track input/output token usage for Gemini_Ocr OCR API calls, along with exact costs.
+Format: Each entry shows complete message content sent to and received from Gemini_Ocr,
+        plus exact token counts and costs for the individual call and the session.
+
+
+
+--- NEW LOGGING SESSION STARTED: 2026-09-22 15:52:10.785 ---

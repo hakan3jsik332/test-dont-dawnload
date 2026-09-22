@@ -1,0 +1,14 @@
+
+#######################################################
+#                 OPENAI API CALL LOG                 #
+#      Game-Changing Translator - Token Analysis      #
+#######################################################
+
+Logging Started: 2026-09-22 15:20:47.059
+Purpose: Track input/output token usage for Openai API calls, along with exact costs.
+Format: Each entry shows complete message content sent to and received from Openai,
+        plus exact token counts and costs for the individual call and the session.
+
+
+
+--- NEW LOGGING SESSION STARTED: 2026-09-22 15:52:10.782 ---
