@@ -18,6 +18,9 @@ import traceback
 import io
 import base64
 import concurrent.futures
+import json
+import urllib.request
+import urllib.error
 
 from logger import log_debug, set_debug_logging_enabled, is_debug_logging_enabled
 from resource_handler import get_resource_path
@@ -181,7 +184,7 @@ class GameChangingTranslator:
         self.translation_sequence_counter = 0  # Track translation sequence numbers
         self.last_displayed_translation_sequence = 0  # Track chronological order for translations
         self.active_translation_calls = set()  # Track active async translation calls
-        self.max_concurrent_translation_calls = 6  # Limit concurrent translation API calls
+        self.max_concurrent_translation_calls = 1  # Limit concurrent translation API calls
         
         # Initialize thread pools for optimized performance (especially for compiled version)
         self.ocr_thread_pool = concurrent.futures.ThreadPoolExecutor(
@@ -189,7 +192,7 @@ class GameChangingTranslator:
             thread_name_prefix="ApiOCR"
         )
         self.translation_thread_pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=6, 
+            max_workers=1, 
             thread_name_prefix="Translation"
         )
         log_debug("Initialized thread pools for OCR and translation processing")
@@ -273,7 +276,9 @@ class GameChangingTranslator:
             'gemini_api': 'Gemini 2.5 Flash-Lite',
             'google_api': 'Google Translate API',
             'deepl_api': 'DeepL API',
-            'marianmt': 'MarianMT (offline and free)'
+            'marianmt': 'MarianMT (offline and free)',
+            'openai_standard': 'OpenAI',
+            'libretranslate': 'LibreTranslate'
         }
         
         # Initialize Gemini Models Manager before updating model names
@@ -302,6 +307,19 @@ class GameChangingTranslator:
         self.openai_context_window_var = tk.IntVar(value=int(self.config['Settings'].get('openai_context_window', '2')))
         self.openai_api_log_enabled_var = tk.BooleanVar(value=self.config.getboolean('Settings', 'openai_api_log_enabled', fallback=True))
         self.openai_api_key_var = tk.StringVar(value=self.config['Settings'].get('openai_api_key', ''))
+        # Standalone OpenAI-compatible / LibreTranslate settings.
+        self.openai_base_url_var = tk.StringVar(
+            value=self.config['Settings'].get('openai_base_url', 'http://127.0.0.1:1234/v1')
+        )
+        self.libretranslate_url_var = tk.StringVar(
+            value=self.config['Settings'].get('libretranslate_url', 'http://127.0.0.1:5000')
+        )
+        self.libretranslate_api_key_var = tk.StringVar(
+            value=self.config['Settings'].get('libretranslate_api_key', '')
+        )
+        self.standalone_timeout_var = tk.IntVar(
+            value=int(self.config['Settings'].get('standalone_timeout', '120'))
+        )
         
         # Separate Gemini model selection for OCR and Translation
         self.gemini_translation_model_var = tk.StringVar(value=self.config['Settings'].get('gemini_translation_model', 'Gemini 2.5 Flash-Lite'))
@@ -494,7 +512,9 @@ class GameChangingTranslator:
         
         # OpenAI language settings
         self.openai_source_lang = self.config['Settings'].get('openai_source_lang', 'en')
-        self.openai_target_lang = self.config['Settings'].get('openai_target_lang', 'pl')
+        self.openai_target_lang = self.config['Settings'].get('openai_target_lang', 'fa')
+        self.libretranslate_source_lang = self.config['Settings'].get('libretranslate_source_lang', 'auto')
+        self.libretranslate_target_lang = self.config['Settings'].get('libretranslate_target_lang', 'fa')
         
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
             base_dir = os.path.dirname(sys.executable)
@@ -948,6 +968,237 @@ class GameChangingTranslator:
             log_debug(f"Error in Gemini model pre-configuration: {e}")
     
     # Gemini OCR Batch Processing Methods (Phase 1)
+    # === MASTER_2_ENGINE_DIRECT_V2_20260923 ===
+    def master_selected_standalone_engine(self):
+        """Resolve the standalone engine from both internal and visible values."""
+        try:
+            internal = self.translation_model_var.get().strip().casefold()
+        except Exception:
+            internal = ''
+        try:
+            visible = self.translation_model_display_var.get().strip().casefold()
+        except Exception:
+            visible = ''
+        if internal in ('openai_standard', 'openai') or visible == 'openai':
+            return 'openai_standard'
+        if internal in ('libretranslate', 'libretranslate_api') or visible == 'libretranslate':
+            return 'libretranslate'
+        return None
+
+    def is_standalone_translation_engine(self):
+        return self.master_selected_standalone_engine() is not None
+
+    def _master_v2_openai_endpoint(self):
+        try:
+            base = self.openai_base_url_var.get().strip().rstrip('/')
+        except Exception:
+            base = ''
+        if not base:
+            base = 'http://127.0.0.1:1234/v1'
+        if base.endswith('/chat/completions'):
+            return base
+        if not base.endswith('/v1') and (
+            base.startswith('http://127.0.0.1:') or
+            base.startswith('http://localhost:') or
+            base.startswith('https://127.0.0.1:') or
+            base.startswith('https://localhost:')
+        ):
+            base += '/v1'
+        return base + '/chat/completions'
+
+    def _master_v2_openai_models_endpoint(self):
+        chat = self._master_v2_openai_endpoint()
+        if chat.endswith('/chat/completions'):
+            return chat[:-len('/chat/completions')] + '/models'
+        return chat.rstrip('/') + '/models'
+
+    def _master_v2_libre_endpoint(self):
+        try:
+            base = self.libretranslate_url_var.get().strip().rstrip('/')
+        except Exception:
+            base = ''
+        if not base:
+            base = 'http://127.0.0.1:5000'
+        return base if base.endswith('/translate') else base + '/translate'
+
+    def _master_v2_post_json(self, url, payload, headers=None, timeout=120):
+        request_headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        if headers:
+            request_headers.update(headers)
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+            headers=request_headers,
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode('utf-8', errors='replace')
+                try:
+                    body = json.loads(raw) if raw else {}
+                except Exception:
+                    body = {'error': raw}
+                return int(response.status), body
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode('utf-8', errors='replace')
+            try:
+                body = json.loads(raw) if raw else {}
+            except Exception:
+                body = {'error': raw}
+            return int(exc.code), body
+        except Exception as exc:
+            return 0, {'error': {'message': str(exc), 'type': type(exc).__name__}}
+
+    def _master_v2_timeout(self):
+        try:
+            return max(10, min(600, int(self.standalone_timeout_var.get())))
+        except Exception:
+            return 120
+
+    def _master_v2_openai_model(self):
+        try:
+            value = self.openai_translation_model_var.get().strip()
+        except Exception:
+            value = ''
+        return value or 'qwen2.5-coder-3b-instruct'
+
+    def _master_v2_translate_openai(self, text_content):
+        text_content = (text_content or '').strip()
+        if not text_content:
+            return ''
+        source = str(getattr(self, 'openai_source_lang', '') or self.source_lang_var.get() or 'auto').strip()
+        target = str(getattr(self, 'openai_target_lang', '') or self.target_lang_var.get() or 'fa').strip()
+        prompt = (
+            'Translate ONLY this video game text. '
+            f'Source language: {source}. Target language: {target}. '
+            'Return only the translation. Preserve names, numbers, punctuation, symbols, '
+            'variables, tags, formatting and line breaks. Do not explain.\n\nTEXT:\n' + text_content
+        )
+        headers = {}
+        try:
+            key = self.openai_api_key_var.get().strip()
+        except Exception:
+            key = ''
+        # Local LM Studio does not need a key. Send Authorization only when supplied.
+        if key:
+            headers['Authorization'] = 'Bearer ' + key
+        status, data = self._master_v2_post_json(
+            self._master_v2_openai_endpoint(),
+            {
+                'model': self._master_v2_openai_model(),
+                'messages': [
+                    {'role': 'system', 'content': 'You are a video game localization translator.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'temperature': 0.1,
+                'max_tokens': 256,
+            },
+            headers=headers,
+            timeout=self._master_v2_timeout(),
+        )
+        if not (200 <= status < 300):
+            error = data.get('error', data) if isinstance(data, dict) else data
+            if isinstance(error, dict):
+                error = error.get('message', error)
+            return f'OpenAI API error: {error}'
+        try:
+            value = data['choices'][0]['message']['content']
+            if isinstance(value, list):
+                value = ''.join(str(x.get('text', '')) for x in value if isinstance(x, dict))
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        except Exception:
+            pass
+        return 'OpenAI API error: empty response'
+
+    def _master_v2_translate_libre(self, text_content):
+        text_content = (text_content or '').strip()
+        if not text_content:
+            return ''
+        source = str(getattr(self, 'libretranslate_source_lang', '') or self.source_lang_var.get() or 'auto').strip()
+        target = str(getattr(self, 'libretranslate_target_lang', '') or self.target_lang_var.get() or 'fa').strip()
+        payload = {'q': text_content, 'source': source or 'auto', 'target': target or 'fa', 'format': 'text'}
+        try:
+            key = self.libretranslate_api_key_var.get().strip()
+        except Exception:
+            key = ''
+        if key:
+            payload['api_key'] = key
+        status, data = self._master_v2_post_json(
+            self._master_v2_libre_endpoint(), payload, timeout=self._master_v2_timeout()
+        )
+        if not (200 <= status < 300):
+            error = data.get('error', data) if isinstance(data, dict) else data
+            return f'LibreTranslate API error: {error}'
+        result = data.get('translatedText', '') if isinstance(data, dict) else ''
+        return result.strip() if isinstance(result, str) and result.strip() else 'LibreTranslate API error: empty response'
+
+    def master_v2_translate_selected(self, text_content):
+        engine = self.master_selected_standalone_engine()
+        if engine == 'openai_standard':
+            return self._master_v2_translate_openai(text_content)
+        if engine == 'libretranslate':
+            return self._master_v2_translate_libre(text_content)
+        return None
+
+    def master_v2_test_openai(self):
+        try:
+            endpoint = self._master_v2_openai_models_endpoint()
+            headers = {'Accept': 'application/json', 'User-Agent': 'Game-Changing-Translator'}
+            try:
+                key = self.openai_api_key_var.get().strip()
+            except Exception:
+                key = ''
+            if key:
+                headers['Authorization'] = 'Bearer ' + key
+            request = urllib.request.Request(endpoint, headers=headers, method='GET')
+            with urllib.request.urlopen(request, timeout=10) as response:
+                raw = response.read().decode('utf-8', errors='replace')
+                try:
+                    payload = json.loads(raw)
+                    ids = [str(x.get('id')) for x in payload.get('data', []) if isinstance(x, dict) and x.get('id')]
+                except Exception:
+                    ids = []
+                messagebox.showinfo(
+                    'OpenAI / LM Studio Test',
+                    f'Connection OK.\nEndpoint: {endpoint}\nModels: {len(ids)}\n\n' + '\n'.join(ids[:20]),
+                    parent=self.root,
+                )
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode('utf-8', errors='replace')[:1000]
+            messagebox.showerror('OpenAI / LM Studio Test', f'HTTP {exc.code}\n{detail}', parent=self.root)
+        except Exception as exc:
+            messagebox.showerror('OpenAI / LM Studio Test', f'Test failed:\n{exc}', parent=self.root)
+
+    def master_v2_test_libre(self):
+        try:
+            endpoint = self._master_v2_libre_endpoint()
+            endpoint = endpoint[:-len('/translate')] + '/languages' if endpoint.endswith('/translate') else endpoint.rstrip('/') + '/languages'
+            request = urllib.request.Request(endpoint, headers={'Accept': 'application/json'}, method='GET')
+            try:
+                key = self.libretranslate_api_key_var.get().strip()
+            except Exception:
+                key = ''
+            if key:
+                request.add_header('X-API-Key', key)
+            with urllib.request.urlopen(request, timeout=10) as response:
+                raw = response.read().decode('utf-8', errors='replace')
+                try:
+                    payload = json.loads(raw)
+                    count = len(payload) if isinstance(payload, list) else 0
+                except Exception:
+                    count = 0
+                messagebox.showinfo(
+                    'LibreTranslate Test',
+                    f'Connection OK.\nEndpoint: {endpoint}\nLanguages returned: {count}',
+                    parent=self.root,
+                )
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode('utf-8', errors='replace')[:1000]
+            messagebox.showerror('LibreTranslate Test', f'HTTP {exc.code}\n{detail}', parent=self.root)
+        except Exception as exc:
+            messagebox.showerror('LibreTranslate Test', f'Test failed:\n{exc}', parent=self.root)
+
     def get_ocr_model_setting(self):
         """Get the current OCR model setting."""
         return self.ocr_model_var.get()
@@ -1058,7 +1309,7 @@ class GameChangingTranslator:
             log_debug("Initialized active_translation_calls")
         
         if not hasattr(self, 'max_concurrent_translation_calls'):
-            self.max_concurrent_translation_calls = 6
+            self.max_concurrent_translation_calls = 1
             log_debug("Initialized max_concurrent_translation_calls")
     
     def check_clear_timeout(self):
@@ -1077,6 +1328,254 @@ class GameChangingTranslator:
 
     def translate_text(self, text_content):
         return self.translation_handler.translate_text(text_content)
+
+    # === FINAL_REPAIR_NO_TRANSLATE_TEXT_20260923 ===
+    def _final_repair_engine_from_display(self):
+        try:
+            value = self.translation_model_display_var.get().strip().casefold()
+        except Exception:
+            value = ''
+        if value == 'openai':
+            return 'openai_standard'
+        if value == 'libretranslate':
+            return 'libretranslate'
+        return None
+
+    def is_standalone_translation_engine(self):
+        try:
+            return self.translation_model_var.get().strip() in ('openai_standard', 'libretranslate')
+        except Exception:
+            return False
+
+    def _final_repair_timeout(self):
+        try:
+            return max(10, min(600, int(self.standalone_timeout_var.get())))
+        except Exception:
+            return 120
+
+    def _final_repair_openai_endpoint(self):
+        try:
+            base = self.openai_base_url_var.get().strip().rstrip('/')
+        except Exception:
+            base = ''
+        if not base:
+            base = 'http://127.0.0.1:1234/v1'
+        if base.endswith('/chat/completions'):
+            return base
+        if (base.startswith('http://127.0.0.1:') or base.startswith('http://localhost:')
+                or base.startswith('https://127.0.0.1:') or base.startswith('https://localhost:')):
+            if not base.endswith('/v1'):
+                base += '/v1'
+        return base + '/chat/completions'
+
+    def _final_repair_libre_endpoint(self):
+        try:
+            base = self.libretranslate_url_var.get().strip().rstrip('/')
+        except Exception:
+            base = ''
+        if not base:
+            base = 'http://127.0.0.1:5000'
+        return base if base.endswith('/translate') else base + '/translate'
+
+    def _final_repair_post_json(self, url, payload, headers=None, timeout=120):
+        req_headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        if headers:
+            req_headers.update(headers)
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers=req_headers,
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode('utf-8', errors='replace')
+                return response.status, (json.loads(raw) if raw else {})
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode('utf-8', errors='replace')
+            try:
+                body = json.loads(raw)
+            except Exception:
+                body = {'error': raw}
+            return exc.code, body
+        except Exception as exc:
+            return 599, {'error': f'{type(exc).__name__}: {exc}'}
+
+    def _final_repair_openai_model(self):
+        try:
+            model = self.openai_translation_model_var.get().strip()
+        except Exception:
+            model = ''
+        return model or 'qwen2.5-coder-3b-instruct'
+
+    def _translate_standalone_openai(self, text_content):
+        text_content = (text_content or '').strip()
+        if not text_content:
+            return ''
+        source = str(getattr(self, 'openai_source_lang', '') or self.source_lang_var.get() or 'auto').strip()
+        target = str(getattr(self, 'openai_target_lang', '') or self.target_lang_var.get() or 'fa').strip()
+        prompt = (
+            'Translate ONLY this video game text. '
+            f'Source language: {source}. Target language: {target}. '
+            'Return only the translation. Preserve names, numbers, punctuation, symbols, '
+            'tags, formatting and line breaks. Do not explain.\n\nTEXT:\n' + text_content
+        )
+        headers = {}
+        try:
+            key = self.openai_api_key_var.get().strip()
+        except Exception:
+            key = ''
+        if key:
+            headers['Authorization'] = 'Bearer ' + key
+
+        status, data = self._final_repair_post_json(
+            self._final_repair_openai_endpoint(),
+            {
+                'model': self._final_repair_openai_model(),
+                'messages': [
+                    {'role': 'system', 'content': 'You are a video game localization translator.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'temperature': 0.1,
+                'max_tokens': 256,
+            },
+            headers=headers,
+            timeout=self._final_repair_timeout(),
+        )
+        if not (200 <= status < 300):
+            error = data.get('error', data) if isinstance(data, dict) else data
+            if isinstance(error, dict):
+                error = error.get('message', error)
+            return f'OpenAI API error: {error}'
+        try:
+            result = data['choices'][0]['message']['content']
+            if isinstance(result, list):
+                result = ''.join(str(x.get('text', '')) for x in result if isinstance(x, dict))
+            if isinstance(result, str) and result.strip():
+                return result.strip()
+        except Exception:
+            pass
+        return 'OpenAI API error: empty response'
+
+    def _translate_standalone_libretranslate(self, text_content):
+        text_content = (text_content or '').strip()
+        if not text_content:
+            return ''
+        source = str(getattr(self, 'libretranslate_source_lang', '') or self.source_lang_var.get() or 'auto').strip()
+        target = str(getattr(self, 'libretranslate_target_lang', '') or self.target_lang_var.get() or 'fa').strip()
+        payload = {'q': text_content, 'source': source or 'auto', 'target': target or 'fa', 'format': 'text'}
+        try:
+            key = self.libretranslate_api_key_var.get().strip()
+        except Exception:
+            key = ''
+        if key:
+            payload['api_key'] = key
+
+        status, data = self._final_repair_post_json(
+            self._final_repair_libre_endpoint(),
+            payload,
+            timeout=self._final_repair_timeout(),
+        )
+        if not (200 <= status < 300):
+            error = data.get('error', data) if isinstance(data, dict) else data
+            return f'LibreTranslate API error: {error}'
+        result = data.get('translatedText', '') if isinstance(data, dict) else ''
+        return result.strip() if isinstance(result, str) and result.strip() else 'LibreTranslate API error: empty response'
+
+    # === URL_TEST_MIX_FINAL_APP ===
+    def _url_test_normalize_openai(self):
+        value = (self.openai_base_url_var.get() or '').strip().rstrip('/')
+        return value or 'http://127.0.0.1:1234/v1'
+
+    def _url_test_normalize_libre(self):
+        value = (self.libretranslate_url_var.get() or '').strip().rstrip('/')
+        return value or 'http://127.0.0.1:5000'
+
+    def test_standalone_openai_url(self):
+        """Lightweight OpenAI-compatible connectivity test using GET /models."""
+        base = self._url_test_normalize_openai()
+        endpoint = base if base.endswith('/v1/models') else base + '/v1/models'
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'Game-Changing-Translator',
+        }
+        key = self.openai_api_key_var.get().strip()
+        if key:
+            headers['Authorization'] = 'Bearer ' + key
+        request = urllib.request.Request(endpoint, headers=headers, method='GET')
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                raw = response.read().decode('utf-8', errors='replace')
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    payload = {}
+                count = len(payload.get('data', [])) if isinstance(payload, dict) else 0
+                messagebox.showinfo(
+                    'OpenAI Test',
+                    f'Connection OK.\nURL: {base}\nModels returned: {count}',
+                    parent=self.root,
+                )
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode('utf-8', errors='replace')[:800]
+            messagebox.showerror('OpenAI Test', f'HTTP {exc.code}\n{detail}', parent=self.root)
+        except urllib.error.URLError as exc:
+            messagebox.showerror('OpenAI Test', f'Connection failed:\n{exc.reason}', parent=self.root)
+        except Exception as exc:
+            messagebox.showerror('OpenAI Test', f'Test failed:\n{exc}', parent=self.root)
+
+    def test_standalone_libre_url(self):
+        """Lightweight LibreTranslate connectivity test using GET /languages."""
+        base = self._url_test_normalize_libre()
+        endpoint = base if base.endswith('/languages') else base + '/languages'
+        request = urllib.request.Request(
+            endpoint,
+            headers={'Accept': 'application/json', 'User-Agent': 'Game-Changing-Translator'},
+            method='GET',
+        )
+        key = self.libretranslate_api_key_var.get().strip()
+        if key:
+            request.add_header('X-API-Key', key)
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                raw = response.read().decode('utf-8', errors='replace')
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    payload = []
+                count = len(payload) if isinstance(payload, list) else 0
+                messagebox.showinfo(
+                    'LibreTranslate Test',
+                    f'Connection OK.\nURL: {base}\nLanguages returned: {count}',
+                    parent=self.root,
+                )
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode('utf-8', errors='replace')[:800]
+            messagebox.showerror('LibreTranslate Test', f'HTTP {exc.code}\n{detail}', parent=self.root)
+        except urllib.error.URLError as exc:
+            messagebox.showerror('LibreTranslate Test', f'Connection failed:\n{exc.reason}', parent=self.root)
+        except Exception as exc:
+            messagebox.showerror('LibreTranslate Test', f'Test failed:\n{exc}', parent=self.root)
+
+    def test_standalone_openai(self):
+        try:
+            result = self._translate_standalone_openai('Hello')
+            if result.startswith('OpenAI API error:'):
+                messagebox.showerror('OpenAI Test', result, parent=self.root)
+            else:
+                messagebox.showinfo('OpenAI Test', 'Connection OK\n\n' + result, parent=self.root)
+        except Exception as exc:
+            messagebox.showerror('OpenAI Test', f'{type(exc).__name__}: {exc}', parent=self.root)
+
+    def test_standalone_libretranslate(self):
+        try:
+            result = self._translate_standalone_libretranslate('Hello')
+            if result.startswith('LibreTranslate API error:'):
+                messagebox.showerror('LibreTranslate Test', result, parent=self.root)
+            else:
+                messagebox.showinfo('LibreTranslate Test', 'Connection OK\n\n' + result, parent=self.root)
+        except Exception as exc:
+            messagebox.showerror('LibreTranslate Test', f'{type(exc).__name__}: {exc}', parent=self.root)
 
     def is_placeholder_text(self, text_content):
         return self.translation_handler.is_placeholder_text(text_content)
@@ -1127,6 +1626,11 @@ class GameChangingTranslator:
 
 
     def on_translation_model_selection_changed(self, event=None, initial_setup=False):
+        # === FINAL_REPAIR_MODEL_SELECTION ===
+        _repair_engine = self._final_repair_engine_from_display()
+        if _repair_engine:
+            self.translation_model_var.set(_repair_engine)
+
         # Handle session management for translation method changes
         if (hasattr(self, 'translation_handler') and self.is_running and not initial_setup):
             current_model = self.translation_model_var.get()
@@ -1147,6 +1651,35 @@ class GameChangingTranslator:
                 self.translation_handler.start_translation_session()
         
         self.ui_interaction_handler.on_translation_model_selection_changed(event, initial_setup)
+
+        # === FINAL_LOCAL_NO_KEY_SELECTION ===
+        try:
+            _local_no_key_display = self.translation_model_display_var.get().strip().casefold()
+            if _local_no_key_display == 'openai':
+                self.translation_model_var.set('openai_standard')
+            elif _local_no_key_display == 'libretranslate':
+                self.translation_model_var.set('libretranslate')
+        except Exception as _local_no_key_selection_error:
+            log_debug(f'Local no-key engine selection correction failed: {_local_no_key_selection_error}')
+
+        # === GOOGLE_KEY_MIXUP_FIX_V5 ===
+        # The two standalone engines must never fall through to Google Translate.
+        try:
+            _display = self.translation_model_display_var.get().strip().casefold()
+            if _display == 'openai':
+                self.translation_model_var.set('openai_standard')
+                if hasattr(self, 'source_lang_var'):
+                    self.source_lang_var.set(getattr(self, 'openai_source_lang', 'en'))
+                if hasattr(self, 'target_lang_var'):
+                    self.target_lang_var.set(getattr(self, 'openai_target_lang', 'fa'))
+            elif _display == 'libretranslate':
+                self.translation_model_var.set('libretranslate')
+                if hasattr(self, 'source_lang_var'):
+                    self.source_lang_var.set(getattr(self, 'libretranslate_source_lang', 'auto'))
+                if hasattr(self, 'target_lang_var'):
+                    self.target_lang_var.set(getattr(self, 'libretranslate_target_lang', 'fa'))
+        except Exception as _standalone_select_error:
+            log_debug(f'V5 standalone engine selection correction failed: {_standalone_select_error}')
         if not initial_setup and self._fully_initialized: 
             self.save_settings()
 

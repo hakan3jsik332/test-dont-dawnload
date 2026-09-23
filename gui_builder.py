@@ -184,6 +184,9 @@ def create_settings_tab(app):
     ttk.Label(frame, text=app.ui_lang.get_label("translation_model_label")).grid(row=0, column=0, padx=5, pady=5, sticky="w")
     
     translation_models_available_for_ui = []
+    # === FINAL_REPAIR_ENGINE_NAMES ===
+    # Standalone engines use stable internal IDs and simple visible names.
+    # The callbacks below map these names to the internal IDs.
     log_debug(f"GUI Builder: Translation model availability check:")
     log_debug(f"  GEMINI_API_AVAILABLE: {app.GEMINI_API_AVAILABLE}")
     log_debug(f"  OPENAI_API_AVAILABLE: {app.OPENAI_API_AVAILABLE}")
@@ -216,6 +219,11 @@ def create_settings_tab(app):
     if not translation_models_available_for_ui: 
         default_model_key_from_var = app.translation_model_var.get() 
         translation_models_available_for_ui.append(app.translation_model_names.get(default_model_key_from_var, "MarianMT (offline and free)"))
+
+    if 'OpenAI' not in translation_models_available_for_ui:
+        translation_models_available_for_ui.append('OpenAI')
+    if 'LibreTranslate' not in translation_models_available_for_ui:
+        translation_models_available_for_ui.append('LibreTranslate')
 
     app.translation_model_combobox = ttk.Combobox(frame, textvariable=app.translation_model_display_var,
                                            values=translation_models_available_for_ui, width=25, state='readonly')
@@ -281,6 +289,48 @@ def create_settings_tab(app):
         app.on_translation_model_selection_changed(event=event, initial_setup=False)
     app.translation_model_combobox.bind('<<ComboboxSelected>>', 
         create_combobox_handler_wrapper(handle_translation_model_selection))
+    # === GOOGLE_KEY_MIXUP_GUI_V5 ===
+    def _v5_force_standalone_engine_id(_event=None):
+        try:
+            _v5_display = app.translation_model_display_var.get().strip().casefold()
+            if _v5_display == 'openai':
+                app.translation_model_var.set('openai_standard')
+            elif _v5_display == 'libretranslate':
+                app.translation_model_var.set('libretranslate')
+        except Exception as _v5_gui_error:
+            log_debug(f'V5 GUI engine correction failed: {_v5_gui_error}')
+    
+    app.translation_model_combobox.bind(
+        '<<ComboboxSelected>>', _v5_force_standalone_engine_id, add='+'
+    )
+
+
+    # === MASTER_V2_GUI ===
+    if 'OpenAI' not in translation_models_available_for_ui:
+        translation_models_available_for_ui.append('OpenAI')
+    if 'LibreTranslate' not in translation_models_available_for_ui:
+        translation_models_available_for_ui.append('LibreTranslate')
+
+    def _master_v2_force_engine_selection(_event=None):
+        try:
+            visible = app.translation_model_display_var.get().strip().casefold()
+            if visible == 'openai':
+                app.translation_model_var.set('openai_standard')
+            elif visible == 'libretranslate':
+                app.translation_model_var.set('libretranslate')
+            else:
+                return
+            # Ensure standalone GUI language values are refreshed after the app's
+            # original model-selection callback has finished.
+            app.root.after_idle(_master_v2_refresh_languages)
+            if hasattr(app, 'refresh_master_v2_engine_controls'):
+                app.root.after_idle(app.refresh_master_v2_engine_controls)
+        except Exception as exc:
+            log_debug(f'Master V2 engine selection error: {exc}')
+
+    app.translation_model_combobox.bind(
+        '<<ComboboxSelected>>', _master_v2_force_engine_selection, add='+'
+    )
 
     # Row 0.5: OCR Model Selection
     ttk.Label(frame, text=app.ui_lang.get_label("ocr_model_label", "OCR Model")).grid(row=1, column=0, padx=5, pady=5, sticky="w")
@@ -421,6 +471,101 @@ def create_settings_tab(app):
     app.target_lang_label = ttk.Label(frame, text=app.ui_lang.get_label("target_lang_label"))
     app.target_lang_label.grid(row=3, column=0, padx=5, pady=5, sticky="w")
     app.target_lang_combobox = ttk.Combobox(frame, textvariable=app.target_display_var, width=25, state='readonly')
+
+    # === MASTER_V2_LANGUAGE_BINDINGS ===
+    def _master_v2_language_pairs(engine):
+        lm = app.language_manager
+        if engine == 'openai_standard':
+            source = list(getattr(lm, 'openai_source_languages', []) or [])
+            target = list(getattr(lm, 'openai_target_languages', []) or [])
+        else:
+            source = list(getattr(lm, 'google_source_languages', []) or [])
+            target = list(getattr(lm, 'google_target_languages', []) or [])
+
+        def clean(items, add_auto=False):
+            out, seen = [], set()
+            for item in items:
+                if isinstance(item, (tuple, list)) and len(item) >= 2:
+                    name, code = str(item[0]), str(item[1])
+                    if code.casefold() not in seen:
+                        seen.add(code.casefold())
+                        out.append((name, code))
+            if add_auto and 'auto' not in seen:
+                out.insert(0, ('Auto', 'auto'))
+                seen.add('auto')
+            if 'fa' not in seen:
+                out.append(('Persian', 'fa'))
+            return out
+
+        return clean(source, engine == 'libretranslate'), clean(target, False)
+
+    def _master_v2_refresh_languages():
+        engine = app.master_selected_standalone_engine()
+        if engine not in ('openai_standard', 'libretranslate'):
+            return
+        source_pairs, target_pairs = _master_v2_language_pairs(engine)
+        app.source_lang_combobox['values'] = [name for name, _ in source_pairs]
+        app.target_lang_combobox['values'] = [name for name, _ in target_pairs]
+
+        if engine == 'openai_standard':
+            source_code = getattr(app, 'openai_source_lang', 'en')
+            target_code = getattr(app, 'openai_target_lang', 'fa')
+        else:
+            source_code = getattr(app, 'libretranslate_source_lang', 'auto')
+            target_code = getattr(app, 'libretranslate_target_lang', 'fa')
+
+        def choose(pairs, code, fallback):
+            wanted = str(code or '').casefold()
+            for name, value in pairs:
+                if value.casefold() == wanted:
+                    return name
+            for name, value in pairs:
+                if value.casefold() == fallback:
+                    return name
+            return pairs[0][0] if pairs else ''
+
+        app.source_display_var.set(choose(source_pairs, source_code, 'en'))
+        app.target_display_var.set(choose(target_pairs, target_code, 'fa'))
+        app.source_lang_var.set(source_code or 'auto')
+        app.target_lang_var.set(target_code or 'fa')
+
+    def _master_v2_source_changed(_event=None):
+        engine = app.master_selected_standalone_engine()
+        if engine not in ('openai_standard', 'libretranslate'):
+            return
+        source_pairs, _ = _master_v2_language_pairs(engine)
+        selected = app.source_display_var.get()
+        for name, code in source_pairs:
+            if name == selected:
+                if engine == 'openai_standard':
+                    app.openai_source_lang = code
+                    app.config['Settings']['openai_source_lang'] = code
+                else:
+                    app.libretranslate_source_lang = code
+                    app.config['Settings']['libretranslate_source_lang'] = code
+                app.source_lang_var.set(code)
+                break
+
+    def _master_v2_target_changed(_event=None):
+        engine = app.master_selected_standalone_engine()
+        if engine not in ('openai_standard', 'libretranslate'):
+            return
+        _, target_pairs = _master_v2_language_pairs(engine)
+        selected = app.target_display_var.get()
+        for name, code in target_pairs:
+            if name == selected:
+                if engine == 'openai_standard':
+                    app.openai_target_lang = code
+                    app.config['Settings']['openai_target_lang'] = code
+                else:
+                    app.libretranslate_target_lang = code
+                    app.config['Settings']['libretranslate_target_lang'] = code
+                app.target_lang_var.set(code)
+                break
+
+    app.source_lang_combobox.bind('<<ComboboxSelected>>', _master_v2_source_changed, add='+')
+    app.target_lang_combobox.bind('<<ComboboxSelected>>', _master_v2_target_changed, add='+')
+    app.root.after_idle(_master_v2_refresh_languages)
     app.target_lang_combobox.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
 
     def on_target_lang_gui_changed(event):
@@ -498,6 +643,83 @@ def create_settings_tab(app):
             # Don't save invalid values - keep the previous valid selection
     app.target_lang_combobox.bind('<<ComboboxSelected>>', 
         create_combobox_handler_wrapper(on_target_lang_gui_changed))
+
+    # === URL_TEST_MIX_FINAL_GUI ===
+    # Always-visible connection panel. This avoids hiding the URL/Test controls
+    # when the selected engine changes.
+    connection_frame = ttk.LabelFrame(frame, text='Engine Connection Settings')
+    connection_frame.grid(row=13, column=0, columnspan=3, padx=5, pady=6, sticky='ew')
+    connection_frame.columnconfigure(1, weight=1)
+
+    ttk.Label(connection_frame, text='OpenAI URL').grid(row=0, column=0, padx=5, pady=4, sticky='w')
+    app.url_test_openai_url_entry = ttk.Entry(
+        connection_frame, textvariable=app.openai_base_url_var, width=44
+    )
+    app.url_test_openai_url_entry.grid(row=0, column=1, padx=5, pady=4, sticky='ew')
+    ttk.Button(
+        connection_frame, text='Test OpenAI', command=app.test_standalone_openai_url, width=14
+    ).grid(row=0, column=2, padx=5, pady=4, sticky='w')
+
+    ttk.Label(connection_frame, text='OpenAI API Key').grid(row=1, column=0, padx=5, pady=4, sticky='w')
+    app.url_test_openai_key_entry = ttk.Entry(
+        connection_frame, textvariable=app.openai_api_key_var, width=44, show='*'
+    )
+    app.url_test_openai_key_entry.grid(row=1, column=1, padx=5, pady=4, sticky='ew')
+
+    ttk.Label(connection_frame, text='OpenAI Model').grid(row=2, column=0, padx=5, pady=4, sticky='w')
+    app.url_test_openai_model_entry = ttk.Entry(
+        connection_frame, textvariable=app.openai_translation_model_var, width=36
+    )
+    app.url_test_openai_model_entry.grid(row=2, column=1, padx=5, pady=4, sticky='ew')
+
+    ttk.Label(connection_frame, text='LibreTranslate URL').grid(row=3, column=0, padx=5, pady=4, sticky='w')
+    app.url_test_libre_url_entry = ttk.Entry(
+        connection_frame, textvariable=app.libretranslate_url_var, width=44
+    )
+    app.url_test_libre_url_entry.grid(row=3, column=1, padx=5, pady=4, sticky='ew')
+    ttk.Button(
+        connection_frame, text='Test LibreTranslate', command=app.test_standalone_libre_url, width=18
+    ).grid(row=3, column=2, padx=5, pady=4, sticky='w')
+
+    ttk.Label(connection_frame, text='LibreTranslate API Key').grid(row=4, column=0, padx=5, pady=4, sticky='w')
+    app.url_test_libre_key_entry = ttk.Entry(
+        connection_frame, textvariable=app.libretranslate_api_key_var, width=44, show='*'
+    )
+    app.url_test_libre_key_entry.grid(row=4, column=1, padx=5, pady=4, sticky='ew')
+
+    ttk.Label(connection_frame, text='Timeout (seconds)').grid(row=5, column=0, padx=5, pady=4, sticky='w')
+    app.url_test_timeout_spinbox = ttk.Spinbox(
+        connection_frame, from_=10, to=600, increment=10,
+        textvariable=app.standalone_timeout_var, width=10
+    )
+    app.url_test_timeout_spinbox.grid(row=5, column=1, padx=5, pady=4, sticky='w')
+
+    def save_url_test_settings(_event=None):
+        try:
+            app.config['Settings']['openai_base_url'] = app.openai_base_url_var.get().strip()
+            app.config['Settings']['libretranslate_url'] = app.libretranslate_url_var.get().strip()
+            app.config['Settings']['libretranslate_api_key'] = app.libretranslate_api_key_var.get().strip()
+            app.config['Settings']['standalone_timeout'] = str(app.standalone_timeout_var.get())
+            if hasattr(app, 'openai_translation_model_var'):
+                app.config['Settings']['openai_translation_model'] = app.openai_translation_model_var.get().strip()
+            from config_manager import save_app_config
+            save_app_config(app.config)
+        except Exception as exc:
+            log_debug(f'URL/Test settings save error: {exc}')
+
+    for _widget in (
+        app.url_test_openai_url_entry,
+        app.url_test_openai_key_entry,
+        app.url_test_openai_model_entry,
+        app.url_test_libre_url_entry,
+        app.url_test_libre_key_entry,
+        app.url_test_timeout_spinbox,
+    ):
+        _widget.bind('<FocusOut>', save_url_test_settings, add='+')
+    app.save_url_test_settings = save_url_test_settings
+
+    app.root.after_idle(save_url_test_settings)
+
 
 
     app.marian_model_label = ttk.Label(frame, text=app.ui_lang.get_label("marian_model_label"))
@@ -601,6 +823,42 @@ def create_settings_tab(app):
     app.openai_api_key_label = ttk.Label(frame, text=app.ui_lang.get_label("openai_api_key_label", "OpenAI API Key")) 
     app.openai_api_key_label.grid(row=9, column=0, padx=5, pady=5, sticky="w")
     app.openai_api_key_entry = ttk.Entry(frame, textvariable=app.openai_api_key_var, width=40, show="*")
+
+    # === MASTER_V2_URL_TEST_GUI ===
+    app.master_v2_engine_frame = ttk.LabelFrame(frame, text='OpenAI / LibreTranslate')
+    app.master_v2_engine_frame.grid(row=13, column=0, columnspan=3, padx=5, pady=5, sticky='ew')
+    app.master_v2_engine_frame.columnconfigure(1, weight=1)
+
+    app.master_v2_openai_url_label = ttk.Label(app.master_v2_engine_frame, text='OpenAI / LM Studio URL')
+    app.master_v2_openai_url_entry = ttk.Entry(app.master_v2_engine_frame, textvariable=app.openai_base_url_var, width=42)
+    app.master_v2_openai_test = ttk.Button(app.master_v2_engine_frame, text='Test OpenAI', command=app.master_v2_test_openai)
+    app.master_v2_openai_url_label.grid(row=0, column=0, padx=5, pady=3, sticky='w')
+    app.master_v2_openai_url_entry.grid(row=0, column=1, padx=5, pady=3, sticky='ew')
+    app.master_v2_openai_test.grid(row=0, column=2, padx=5, pady=3, sticky='w')
+
+    app.master_v2_libre_url_label = ttk.Label(app.master_v2_engine_frame, text='LibreTranslate URL')
+    app.master_v2_libre_url_entry = ttk.Entry(app.master_v2_engine_frame, textvariable=app.libretranslate_url_var, width=42)
+    app.master_v2_libre_test = ttk.Button(app.master_v2_engine_frame, text='Test LibreTranslate', command=app.master_v2_test_libre)
+    app.master_v2_libre_url_label.grid(row=1, column=0, padx=5, pady=3, sticky='w')
+    app.master_v2_libre_url_entry.grid(row=1, column=1, padx=5, pady=3, sticky='ew')
+    app.master_v2_libre_test.grid(row=1, column=2, padx=5, pady=3, sticky='w')
+
+    app.master_v2_timeout_label = ttk.Label(app.master_v2_engine_frame, text='Timeout (seconds)')
+    app.master_v2_timeout_spin = ttk.Spinbox(app.master_v2_engine_frame, from_=10, to=600, increment=10, textvariable=app.standalone_timeout_var, width=10)
+    app.master_v2_timeout_label.grid(row=2, column=0, padx=5, pady=3, sticky='w')
+    app.master_v2_timeout_spin.grid(row=2, column=1, padx=5, pady=3, sticky='w')
+
+    def refresh_master_v2_engine_controls():
+        engine = app.master_selected_standalone_engine()
+        show = engine in ('openai_standard', 'libretranslate')
+        if show:
+            app.master_v2_engine_frame.grid()
+        else:
+            app.master_v2_engine_frame.grid_remove()
+
+    app.refresh_master_v2_engine_controls = refresh_master_v2_engine_controls
+    app.root.after_idle(refresh_master_v2_engine_controls)
+
     app.openai_api_key_entry.grid(row=9, column=1, padx=5, pady=5, sticky="ew")
     # Set initial button text based on visibility
     initial_openai_text = app.ui_lang.get_label("show_btn", "Show") 
@@ -1285,6 +1543,236 @@ def create_settings_tab(app):
     app.settings_tab_save_button = save_settings_button
     
     frame.columnconfigure(1, weight=1)
+
+
+    # === FINAL_REPAIR_ENGINE_GUI ===
+    app.final_repair_engine_frame = ttk.LabelFrame(frame, text='OpenAI / LibreTranslate')
+    app.final_repair_engine_frame.grid(row=13, column=0, columnspan=3, padx=5, pady=5, sticky='ew')
+    app.final_repair_engine_frame.columnconfigure(1, weight=1)
+
+    app.final_repair_engine_label = ttk.Label(app.final_repair_engine_frame, text='Engine: -')
+    app.final_repair_engine_label.grid(row=0, column=0, columnspan=3, padx=5, pady=3, sticky='w')
+
+    app.final_repair_openai_url_label = ttk.Label(app.final_repair_engine_frame, text='OpenAI Base URL')
+    app.final_repair_openai_url_entry = ttk.Entry(app.final_repair_engine_frame, textvariable=app.openai_base_url_var, width=42)
+    app.final_repair_openai_key_label = ttk.Label(app.final_repair_engine_frame, text='OpenAI API Key')
+    app.final_repair_openai_key_entry = ttk.Entry(app.final_repair_engine_frame, textvariable=app.openai_api_key_var, width=42, show='*')
+    app.final_repair_openai_model_label = ttk.Label(app.final_repair_engine_frame, text='OpenAI Model')
+    app.final_repair_openai_model_entry = ttk.Entry(app.final_repair_engine_frame, textvariable=app.openai_translation_model_var, width=35)
+    app.final_repair_openai_test = ttk.Button(app.final_repair_engine_frame, text='Test OpenAI', command=app.test_standalone_openai)
+
+    app.final_repair_libre_url_label = ttk.Label(app.final_repair_engine_frame, text='LibreTranslate URL')
+    app.final_repair_libre_url_entry = ttk.Entry(app.final_repair_engine_frame, textvariable=app.libretranslate_url_var, width=42)
+    app.final_repair_libre_key_label = ttk.Label(app.final_repair_engine_frame, text='LibreTranslate API Key')
+    app.final_repair_libre_key_entry = ttk.Entry(app.final_repair_engine_frame, textvariable=app.libretranslate_api_key_var, width=42, show='*')
+    app.final_repair_libre_test = ttk.Button(app.final_repair_engine_frame, text='Test LibreTranslate', command=app.test_standalone_libretranslate)
+
+    app.final_repair_timeout_label = ttk.Label(app.final_repair_engine_frame, text='Timeout (seconds)')
+    app.final_repair_timeout_entry = ttk.Spinbox(
+        app.final_repair_engine_frame, from_=10, to=600, increment=10,
+        width=10, textvariable=app.standalone_timeout_var
+    )
+
+    def refresh_final_repair_engine_ui():
+        for widget in (
+            app.final_repair_openai_url_label, app.final_repair_openai_url_entry,
+            app.final_repair_openai_key_label, app.final_repair_openai_key_entry,
+            app.final_repair_openai_model_label, app.final_repair_openai_model_entry,
+            app.final_repair_openai_test,
+            app.final_repair_libre_url_label, app.final_repair_libre_url_entry,
+            app.final_repair_libre_key_label, app.final_repair_libre_key_entry,
+            app.final_repair_libre_test,
+            app.final_repair_timeout_label, app.final_repair_timeout_entry,
+        ):
+            widget.grid_remove()
+
+        engine = app.translation_model_var.get().strip()
+        if engine == 'openai_standard':
+            app.final_repair_engine_label.config(text='Engine: OpenAI')
+            rows = (
+                (app.final_repair_openai_url_label, app.final_repair_openai_url_entry, 1),
+                (app.final_repair_openai_key_label, app.final_repair_openai_key_entry, 2),
+                (app.final_repair_openai_model_label, app.final_repair_openai_model_entry, 3),
+                (app.final_repair_timeout_label, app.final_repair_timeout_entry, 4),
+            )
+            for label, field, row in rows:
+                label.grid(row=row, column=0, padx=5, pady=3, sticky='w')
+                field.grid(row=row, column=1, padx=5, pady=3, sticky='ew')
+            app.final_repair_openai_test.grid(row=3, column=2, padx=5, pady=3, sticky='e')
+            app.final_repair_engine_frame.grid()
+        elif engine == 'libretranslate':
+            app.final_repair_engine_label.config(text='Engine: LibreTranslate')
+            rows = (
+                (app.final_repair_libre_url_label, app.final_repair_libre_url_entry, 1),
+                (app.final_repair_libre_key_label, app.final_repair_libre_key_entry, 2),
+                (app.final_repair_timeout_label, app.final_repair_timeout_entry, 3),
+            )
+            for label, field, row in rows:
+                label.grid(row=row, column=0, padx=5, pady=3, sticky='w')
+                field.grid(row=row, column=1, padx=5, pady=3, sticky='ew')
+            app.final_repair_libre_test.grid(row=2, column=2, padx=5, pady=3, sticky='e')
+            app.final_repair_engine_frame.grid()
+        else:
+            app.final_repair_engine_frame.grid_remove()
+
+    app.refresh_final_repair_engine_ui = refresh_final_repair_engine_ui
+    refresh_final_repair_engine_ui()
+
+
+    # === FINAL_REPAIR_LANGUAGE_GUI ===
+    def _final_repair_engine_id():
+        try:
+            internal = app.translation_model_var.get().strip()
+        except Exception:
+            internal = ''
+        if internal in ('openai_standard', 'libretranslate'):
+            return internal
+        try:
+            display = app.translation_model_display_var.get().strip().casefold()
+        except Exception:
+            display = ''
+        if display == 'openai':
+            app.translation_model_var.set('openai_standard')
+            return 'openai_standard'
+        if display == 'libretranslate':
+            app.translation_model_var.set('libretranslate')
+            return 'libretranslate'
+        return None
+
+    def _final_repair_language_pairs(engine):
+        lm = app.language_manager
+        if engine == 'openai_standard':
+            source = list(getattr(lm, 'openai_source_languages', []) or [])
+            target = list(getattr(lm, 'openai_target_languages', []) or [])
+        else:
+            source = list(getattr(lm, 'google_source_languages', []) or [])
+            target = list(getattr(lm, 'google_target_languages', []) or [])
+
+        def clean(items, include_auto=False):
+            result = []
+            seen = set()
+            for item in items:
+                if not isinstance(item, (tuple, list)) or len(item) < 2:
+                    continue
+                name = str(item[0]).strip()
+                code = str(item[1]).strip()
+                if not name or not code or code.casefold() in seen:
+                    continue
+                seen.add(code.casefold())
+                result.append((name, code))
+            if include_auto and 'auto' not in seen:
+                result.insert(0, ('Auto', 'auto'))
+            if 'fa' not in seen:
+                result.append(('Persian', 'fa'))
+            return result
+
+        return clean(source, include_auto=True), clean(target, include_auto=False)
+
+    def _final_repair_name_for_code(pairs, code, fallbacks=()):
+        wanted = str(code or '').strip().casefold()
+        for name, value in pairs:
+            if value.casefold() == wanted:
+                return name
+        for fallback in fallbacks:
+            for name, value in pairs:
+                if value.casefold() == str(fallback).casefold():
+                    return name
+        return pairs[0][0] if pairs else ''
+
+    def refresh_final_repair_languages(event=None):
+        try:
+            engine = _final_repair_engine_id()
+            if not engine:
+                return
+            source_pairs, target_pairs = _final_repair_language_pairs(engine)
+            app.source_lang_combobox['values'] = [name for name, _ in source_pairs]
+            app.target_lang_combobox['values'] = [name for name, _ in target_pairs]
+
+            if engine == 'openai_standard':
+                source_code = getattr(app, 'openai_source_lang', 'en') or 'en'
+                target_code = getattr(app, 'openai_target_lang', 'fa') or 'fa'
+            else:
+                source_code = getattr(app, 'libretranslate_source_lang', 'auto') or 'auto'
+                target_code = getattr(app, 'libretranslate_target_lang', 'fa') or 'fa'
+
+            app.source_display_var.set(_final_repair_name_for_code(source_pairs, source_code, ('en', 'auto')))
+            app.target_display_var.set(_final_repair_name_for_code(target_pairs, target_code, ('fa', 'en')))
+            log_debug(f'FINAL REPAIR languages: {engine} source={source_code} target={target_code}')
+        except Exception as exc:
+            log_debug(f'FINAL REPAIR language refresh error: {type(exc).__name__}: {exc}')
+
+    def _final_repair_save_language(engine, direction, code):
+        if direction == 'source':
+            if engine == 'openai_standard':
+                app.openai_source_lang = code
+                app.config['Settings']['openai_source_lang'] = code
+            else:
+                app.libretranslate_source_lang = code
+                app.config['Settings']['libretranslate_source_lang'] = code
+            app.source_lang_var.set(code)
+        else:
+            if engine == 'openai_standard':
+                app.openai_target_lang = code
+                app.config['Settings']['openai_target_lang'] = code
+            else:
+                app.libretranslate_target_lang = code
+                app.config['Settings']['libretranslate_target_lang'] = code
+            app.target_lang_var.set(code)
+        try:
+            if hasattr(app, 'translation_handler') and hasattr(app.translation_handler, '_clear_active_context'):
+                app.translation_handler._clear_active_context()
+        except Exception:
+            pass
+        try:
+            app.save_settings()
+        except Exception as exc:
+            log_debug(f'FINAL REPAIR settings save error: {exc}')
+
+    def on_final_repair_source_language(event=None):
+        engine = _final_repair_engine_id()
+        if not engine:
+            return
+        selected = app.source_display_var.get().strip()
+        source_pairs, _ = _final_repair_language_pairs(engine)
+        for name, code in source_pairs:
+            if name == selected:
+                _final_repair_save_language(engine, 'source', code)
+                break
+
+    def on_final_repair_target_language(event=None):
+        engine = _final_repair_engine_id()
+        if not engine:
+            return
+        selected = app.target_display_var.get().strip()
+        _, target_pairs = _final_repair_language_pairs(engine)
+        for name, code in target_pairs:
+            if name == selected:
+                _final_repair_save_language(engine, 'target', code)
+                break
+
+    app.source_lang_combobox.bind('<<ComboboxSelected>>', on_final_repair_source_language, add='+')
+    app.target_lang_combobox.bind('<<ComboboxSelected>>', on_final_repair_target_language, add='+')
+
+    def _final_repair_model_changed(event=None):
+        try:
+            display = app.translation_model_display_var.get().strip()
+            if display == 'OpenAI':
+                app.translation_model_var.set('openai_standard')
+            elif display == 'LibreTranslate':
+                app.translation_model_var.set('libretranslate')
+        except Exception:
+            pass
+        try:
+            app.root.after_idle(refresh_final_repair_languages)
+            app.root.after_idle(getattr(app, 'refresh_final_repair_engine_ui', lambda: None))
+        except Exception:
+            refresh_final_repair_languages()
+            getattr(app, 'refresh_final_repair_engine_ui', lambda: None)()
+
+    app.translation_model_combobox.bind('<<ComboboxSelected>>', _final_repair_model_changed, add='+')
+    app.refresh_final_repair_languages = refresh_final_repair_languages
+    app.root.after_idle(refresh_final_repair_languages)
+    app.root.after_idle(getattr(app, 'refresh_final_repair_engine_ui', lambda: None))
 
 def create_api_usage_tab(app):
     """Create the API Usage tab with provider-specific statistics."""
