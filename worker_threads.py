@@ -484,70 +484,35 @@ def start_async_translation(app, text_to_translate, ocr_sequence_number):
 
 
 def process_translation_async(app, text_to_translate, translation_sequence, ocr_sequence_number):
-    """Process translation asynchronously with direct standalone-engine routing."""
+    """Process translation API call asynchronously with timeout and staleness handling."""
     start_time = time.monotonic()
+    
     try:
         log_debug(f"Processing async translation {translation_sequence}")
-
-        if isinstance(text_to_translate, str):
-            stripped = text_to_translate.strip()
-            if stripped.lower().startswith(('translation error:', 'translation processing error:')):
-                log_debug("Ignoring translator-generated error text; not sending it back for translation.")
-                return
-
-        engine = None
-        try:
-            engine = app.master_selected_standalone_engine()
-        except Exception:
-            pass
-
-        if engine == 'openai_standard':
-            translation_result = app.master_v2_translate_selected(text_to_translate)
-        elif engine == 'libretranslate':
-            translation_result = app.master_v2_translate_selected(text_to_translate)
-        else:
-            translation_result = app.translation_handler.translate_text_with_timeout(
-                text_to_translate,
-                timeout_seconds=120.0,
-                ocr_batch_number=ocr_sequence_number,
-            )
-
+        
+        translation_result = app.translation_handler.translate_text_with_timeout(text_to_translate, timeout_seconds=10.0, ocr_batch_number=ocr_sequence_number)
+        
         elapsed_time = time.monotonic() - start_time
+        if elapsed_time > 5.0:
+            log_debug(f"Translation {translation_sequence} took {elapsed_time:.1f}s, may be stale but will attempt display")
+        
         log_debug(f"Translation {translation_sequence} completed in {elapsed_time:.3f}s: '{translation_result}'")
-        app.root.after(
-            0,
-            process_translation_response,
-            app,
-            translation_result,
-            translation_sequence,
-            text_to_translate,
-            ocr_sequence_number,
-        )
+        
+        app.root.after(0, process_translation_response, app, translation_result, translation_sequence, text_to_translate, ocr_sequence_number)
+        
     except Exception as e:
         elapsed_time = time.monotonic() - start_time
-        log_debug(
-            f"Error in async translation {translation_sequence} after "
-            f"{elapsed_time:.2f}s: {type(e).__name__} - {e}"
-        )
+        log_debug(f"Error in async translation {translation_sequence} after {elapsed_time:.2f}s: {type(e).__name__} - {e}")
+        
         error_msg = f"Translation error: {str(e)}"
-        try:
-            app.root.after(
-                0,
-                process_translation_response,
-                app,
-                error_msg,
-                translation_sequence,
-                text_to_translate,
-                ocr_sequence_number,
-            )
-        except Exception:
-            pass
+        app.root.after(0, process_translation_response, app, error_msg, translation_sequence, text_to_translate, ocr_sequence_number)
+    
     finally:
         try:
             app.active_translation_calls.discard(translation_sequence)
-        except Exception:
-            pass
-
+            log_debug(f"Translation {translation_sequence} finished (active calls: {len(app.active_translation_calls)})")
+        except Exception as cleanup_error:
+            log_debug(f"Error cleaning up translation {translation_sequence}: {cleanup_error}")
 
 
 def process_translation_response(app, translation_result, translation_sequence, original_text, ocr_sequence_number):
@@ -575,7 +540,6 @@ def process_translation_response(app, translation_result, translation_sequence, 
                           "DeepL Client init error:", "Translation error:", 
                           "Google Translate API client not initialized", 
                           "DeepL API client not initialized", 
-                          "OpenAI API error:", "LibreTranslate API error:", 
                           "MarianMT translator not initialized")
         
         if isinstance(translation_result, str) and any(translation_result.startswith(p) for p in error_prefixes):
