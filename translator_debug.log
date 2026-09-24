@@ -156,62 +156,73 @@
 2026-09-22 15:20:47: Cache file paths: Google: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\googletrans_cache.txt, DeepL: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\deepl_cache.txt, Gemini: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\gemini_cache.txt, OpenAI: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\openai_cache.txt
 2026-09-22 15:20:47: UpdateChecker initialized - Current version: v3.7.0
 2026-09-22 15:20:47: Tesseract path set to: C:\Program Files\Tesseract-OCR\tesseract.exe
-2026-09-22 15:51:17: MarianMT: Attempting to import transformers...
-2026-09-22 15:51:46: MarianMT: transformers import successful
-2026-09-22 15:51:46: MarianMT: Attempting to import torch...
-2026-09-22 15:51:46: MarianMT: torch import successful
-2026-09-22 15:51:46: GPU: found (NVIDIA GeForce GTX 1650), GPU libraries: not found, MarianMT running on CPU.
-2026-09-22 15:51:46: MarianMT: All imports successful, MARIANMT_AVAILABLE = True
-2026-09-22 15:51:50: RTL text processor imported successfully
-2026-09-22 15:51:58: Pre-loaded Google Generative AI libraries (legacy fallback)
-2026-09-22 15:52:08: Pre-loaded OpenAI library
-2026-09-22 15:52:08: OpenAI library available for OCR
-2026-09-22 15:52:08: Pre-loaded requests library
-2026-09-22 15:52:09: Checking for staged updates at startup
-2026-09-22 15:52:09: UpdateApplier initialized - Base directory: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main
-2026-09-22 15:52:09: No staged update found
-2026-09-22 15:52:10: Application execution environment:
-2026-09-22 15:52:10:   Compiled/Frozen: False
-2026-09-22 15:52:10:   Python script mode
-2026-09-22 15:52:10:   Script path: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\app_logic.py
-2026-09-22 15:52:10: Library availability check:
-2026-09-22 15:52:10:   Keyboard library: available
-2026-09-22 15:52:10:   Google Translate API libraries: available
-2026-09-22 15:52:10:   DeepL API libraries: available
-2026-09-22 15:52:10:   Gemini API libraries: available
-2026-09-22 15:52:10:   OpenAI API libraries: available
-2026-09-22 15:52:10:   MarianMT libraries: available
-2026-09-22 15:52:10: Process-level CPU affinity DISABLED via configuration flag
-2026-09-22 15:52:10: Initialized thread pools for OCR and translation processing
-2026-09-22 15:52:10: Initialized adaptive scan interval infrastructure
-2026-09-22 15:52:10: Default MarianMT models path set to: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\resources/MarianMT_select_models.csv
-2026-09-22 15:52:10: Loaded language lists: Google Src(55), Google Tgt(55), DeepL Src(33), DeepL Tgt(36), Gemini Src(41), Gemini Tgt(41), OpenAI Src(41), OpenAI Tgt(41)
-2026-09-22 15:52:10: Loaded 55 generic language name mappings.
-2026-09-22 15:52:10: Loaded 222 language display name mappings.
-2026-09-22 15:52:10: Loaded 268 UI labels from C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\resources\gui_eng.csv
-2026-09-22 15:52:10: Sample labels: [('main_tab_title', 'Home'), ('select_source_btn', 'Select Source Area (OCR)'), ('select_target_btn', 'Select Target Area (Translation)'), ('start_btn', 'Start'), ('stop_btn', 'Stop')]
-2026-09-22 15:52:10: Loaded 6 Gemini models from CSV
-2026-09-22 15:52:10: Translation models: 5
-2026-09-22 15:52:10: OCR models: 4
-2026-09-22 15:52:10: Loaded 3 OpenAI models from CSV
-2026-09-22 15:52:10: Translation models: 3
-2026-09-22 15:52:10: Updated translation model names: {'openai_translation_GPT 5 Nano': 'GPT 5 Nano', 'openai_translation_GPT 4.1 Mini': 'GPT 4.1 Mini', 'openai_translation_GPT 4.1 Nano': 'GPT 4.1 Nano', 'gemini_translation_Gemini 2.5 Flash 09-2025': 'Gemini 2.5 Flash 09-2025', 'gemini_translation_Gemini 2.5 Flash-Lite 09-2025': 'Gemini 2.5 Flash-Lite 09-2025', 'gemini_translation_Gemini 2.5 Flash': 'Gemini 2.5 Flash', 'gemini_translation_Gemini 2.5 Flash-Lite': 'Gemini 2.5 Flash-Lite', 'gemini_translation_Gemini 2.0 Flash': 'Gemini 2.0 Flash', 'google_api': 'Google Translate API', 'deepl_api': 'DeepL API', 'marianmt': 'MarianMT (offline and free)', 'gemini_api': 'Gemini 2.5 Flash 09-2025', 'openai_api': 'GPT 5 Nano'}
-2026-09-22 15:52:10: Initialized adaptive scan interval: base=300ms, current=300ms
-2026-09-22 15:52:10: Statistics handler initialized with provider-specific log file paths.
-2026-09-22 15:52:10: Initialized unified translation cache with max_size=1000
-2026-09-22 15:52:10: Gemini API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\Gemini_Translation_Long_Log.txt
-2026-09-22 15:52:10: Initialized gemini session counter: Translation=1
-2026-09-22 15:52:10: Gemini provider initialized
-2026-09-22 15:52:10: Openai API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\OpenAI_Translation_Long_Log.txt
-2026-09-22 15:52:10: Initialized openai session counter: Translation=1
-2026-09-22 15:52:10: OpenAI provider initialized
-2026-09-22 15:52:10: Gemini_Ocr OCR API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\Gemini_OCR_Long_Log.txt
-2026-09-22 15:52:10: Initialized gemini_ocr OCR session counter: 1
-2026-09-22 15:52:10: GeminiOCRProvider initialized
-2026-09-22 15:52:10: Openai_Ocr OCR API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\OpenAI_OCR_Long_Log.txt
-2026-09-22 15:52:10: Initialized openai_ocr OCR session counter: 1
-2026-09-22 15:52:10: OpenAIOCRProvider initialized
-2026-09-22 15:52:10: Translation handler initialized with unified cache, LLM providers, and OCR providers
-2026-09-22 15:52:10: Cache file paths: Google: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\googletrans_cache.txt, DeepL: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\deepl_cache.txt, Gemini: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\gemini_cache.txt, OpenAI: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\openai_cache.txt
-2026-09-22 15:52:10: UpdateChecker initialized - Current version: v3.7.0
-2026-09-22 15:52:10: Tesseract path set to: C:\Program Files\Tesseract-OCR\tesseract.exe
+2026-09-24 03:38:28: MarianMT: Attempting to import transformers...
+2026-09-24 03:38:36: MarianMT: transformers import successful
+2026-09-24 03:38:36: MarianMT: Attempting to import torch...
+2026-09-24 03:38:36: MarianMT: torch import successful
+2026-09-24 03:38:36: GPU: found (NVIDIA GeForce GTX 1650), GPU libraries: not found, MarianMT running on CPU.
+2026-09-24 03:38:36: MarianMT: All imports successful, MARIANMT_AVAILABLE = True
+2026-09-24 03:38:37: RTL text processor imported successfully
+2026-09-24 03:38:38: Pre-loaded Google Generative AI libraries (legacy fallback)
+2026-09-24 03:38:39: Pre-loaded OpenAI library
+2026-09-24 03:38:39: OpenAI library available for OCR
+2026-09-24 03:38:39: Pre-loaded requests library
+2026-09-24 03:38:46: MarianMT: Attempting to import transformers...
+2026-09-24 03:38:52: MarianMT: transformers import successful
+2026-09-24 03:38:52: MarianMT: Attempting to import torch...
+2026-09-24 03:38:52: MarianMT: torch import successful
+2026-09-24 03:38:52: GPU: found (NVIDIA GeForce GTX 1650), GPU libraries: not found, MarianMT running on CPU.
+2026-09-24 03:38:52: MarianMT: All imports successful, MARIANMT_AVAILABLE = True
+2026-09-24 03:38:53: RTL text processor imported successfully
+2026-09-24 03:38:54: Pre-loaded Google Generative AI libraries (legacy fallback)
+2026-09-24 03:38:55: Pre-loaded OpenAI library
+2026-09-24 03:38:55: OpenAI library available for OCR
+2026-09-24 03:38:55: Pre-loaded requests library
+2026-09-24 03:38:56: Checking for staged updates at startup
+2026-09-24 03:38:56: UpdateApplier initialized - Base directory: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main
+2026-09-24 03:38:56: No staged update found
+2026-09-24 03:38:56: Application execution environment:
+2026-09-24 03:38:56:   Compiled/Frozen: False
+2026-09-24 03:38:56:   Python script mode
+2026-09-24 03:38:56:   Script path: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\app_logic.py
+2026-09-24 03:38:56: Library availability check:
+2026-09-24 03:38:56:   Keyboard library: available
+2026-09-24 03:38:56:   Google Translate API libraries: available
+2026-09-24 03:38:56:   DeepL API libraries: available
+2026-09-24 03:38:56:   Gemini API libraries: available
+2026-09-24 03:38:56:   OpenAI API libraries: available
+2026-09-24 03:38:56:   MarianMT libraries: available
+2026-09-24 03:38:56: Process-level CPU affinity DISABLED via configuration flag
+2026-09-24 03:38:56: Initialized thread pools for OCR and translation processing
+2026-09-24 03:38:56: Initialized adaptive scan interval infrastructure
+2026-09-24 03:38:56: Default MarianMT models path set to: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\resources/MarianMT_select_models.csv
+2026-09-24 03:38:56: Loaded language lists: Google Src(55), Google Tgt(55), DeepL Src(33), DeepL Tgt(36), Gemini Src(41), Gemini Tgt(41), OpenAI Src(41), OpenAI Tgt(41)
+2026-09-24 03:38:56: Loaded 55 generic language name mappings.
+2026-09-24 03:38:56: Loaded 222 language display name mappings.
+2026-09-24 03:38:56: Loaded 268 UI labels from C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\resources\gui_eng.csv
+2026-09-24 03:38:56: Sample labels: [('main_tab_title', 'Home'), ('select_source_btn', 'Select Source Area (OCR)'), ('select_target_btn', 'Select Target Area (Translation)'), ('start_btn', 'Start'), ('stop_btn', 'Stop')]
+2026-09-24 03:38:56: Loaded 6 Gemini models from CSV
+2026-09-24 03:38:56: Translation models: 5
+2026-09-24 03:38:56: OCR models: 4
+2026-09-24 03:38:56: Loaded 3 OpenAI models from CSV
+2026-09-24 03:38:56: Translation models: 3
+2026-09-24 03:38:56: Updated translation model names: {'openai_translation_GPT 5 Nano': 'GPT 5 Nano', 'openai_translation_GPT 4.1 Mini': 'GPT 4.1 Mini', 'openai_translation_GPT 4.1 Nano': 'GPT 4.1 Nano', 'gemini_translation_Gemini 2.5 Flash 09-2025': 'Gemini 2.5 Flash 09-2025', 'gemini_translation_Gemini 2.5 Flash-Lite 09-2025': 'Gemini 2.5 Flash-Lite 09-2025', 'gemini_translation_Gemini 2.5 Flash': 'Gemini 2.5 Flash', 'gemini_translation_Gemini 2.5 Flash-Lite': 'Gemini 2.5 Flash-Lite', 'gemini_translation_Gemini 2.0 Flash': 'Gemini 2.0 Flash', 'google_api': 'Google Translate API', 'deepl_api': 'DeepL API', 'marianmt': 'MarianMT (offline and free)', 'gemini_api': 'Gemini 2.5 Flash 09-2025', 'openai_api': 'GPT 5 Nano'}
+2026-09-24 03:38:56: Initialized adaptive scan interval: base=300ms, current=300ms
+2026-09-24 03:38:56: Statistics handler initialized with provider-specific log file paths.
+2026-09-24 03:38:56: Initialized unified translation cache with max_size=1000
+2026-09-24 03:38:56: Gemini API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\Gemini_Translation_Long_Log.txt
+2026-09-24 03:38:56: Initialized gemini session counter: Translation=1
+2026-09-24 03:38:56: Gemini provider initialized
+2026-09-24 03:38:56: Openai API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\OpenAI_Translation_Long_Log.txt
+2026-09-24 03:38:56: Initialized openai session counter: Translation=1
+2026-09-24 03:38:56: OpenAI provider initialized
+2026-09-24 03:38:56: Gemini_Ocr OCR API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\Gemini_OCR_Long_Log.txt
+2026-09-24 03:38:56: Initialized gemini_ocr OCR session counter: 1
+2026-09-24 03:38:56: GeminiOCRProvider initialized
+2026-09-24 03:38:56: Openai_Ocr OCR API logging continues in existing file: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\OpenAI_OCR_Long_Log.txt
+2026-09-24 03:38:56: Initialized openai_ocr OCR session counter: 1
+2026-09-24 03:38:56: OpenAIOCRProvider initialized
+2026-09-24 03:38:56: Translation handler initialized with unified cache, LLM providers, and OCR providers
+2026-09-24 03:38:56: Cache file paths: Google: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\googletrans_cache.txt, DeepL: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\deepl_cache.txt, Gemini: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\gemini_cache.txt, OpenAI: C:\Users\mikahill2\Downloads\Programs\New folder (2)\game-title-translator-main\openai_cache.txt
+2026-09-24 03:38:56: UpdateChecker initialized - Current version: v3.7.0
+2026-09-24 03:38:56: Tesseract path set to: C:\Program Files\Tesseract-OCR\tesseract.exe

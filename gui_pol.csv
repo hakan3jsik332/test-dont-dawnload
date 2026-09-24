@@ -1,0 +1,269 @@
+key,value
+main_tab_title,Start
+select_source_btn,Wybierz obszar źródłowy (OCR)
+select_target_btn,Wybierz obszar tłumaczenia
+start_btn,Start
+stop_btn,Stop
+hide_source_btn,Pokaż lub ukryj okno źródłowe
+hide_target_btn,Pokaż lub ukryj okno tłumaczenia
+clear_cache_btn,Wyczyść bufor tłumaczenia
+clear_debug_log_btn,Wyczyść dziennik debugowania
+toggle_debug_log_disable_btn,Wyłącz dziennik debugowania
+toggle_debug_log_enable_btn,Włącz dziennik debugowania
+gui_language_label,Język interfejsu
+keyboard_shortcuts_title,Skróty klawiaturowe
+status_ready,Status: Gotowy
+status_ready_hotkey,"Status: program gotowy. Naciśnij ~, aby rozpocząć/zatrzymać."
+shortcut_start_stop,Rozpocznij/zatrzymaj tłumaczenie
+shortcut_toggle_source,Przełącz widoczność okna źródłowego
+shortcut_toggle_target,Przełącz widoczność okna tłumaczenia
+shortcut_save_settings,Zapisz ustawienia
+shortcut_clear_cache,Wyczyść bufor tłumaczenia
+shortcut_clear_log,Wyczyść dziennik debugowania
+status_running,"program uruchomiony (naciśnij ~, aby zatrzymać)"
+status_stopped,"program zatrzymany (naciśnij ~, aby rozpocząć)"
+show_btn,Pokaż
+hide_btn,Ukryj
+settings_tab_title,Ustawienia
+translation_model_label,Model tłumaczenia:
+translation_model_marianmt_offline,MarianMT (lokalny i bezpłatny)
+ocr_model_label,Model OCR:
+ocr_model_tesseract,Tesseract (lokalny)
+ocr_model_gemini,Gemini API (online)
+source_lang_label,Język źródłowy:
+target_lang_label,Język docelowy:
+marian_model_label,Model MarianMT:
+google_api_key_label,Klucz API Google Translate:
+deepl_api_key_label,Klucz API DeepL:
+gemini_api_key_label,Klucz API Gemini:
+deepl_model_type_label,Jakość:
+gemini_context_window_label,Okno kontekstu:
+gemini_context_window_0,0 (brak)
+gemini_context_window_1,1 (ostatni napis)
+gemini_context_window_2,2 (dwa napisy)
+gemini_context_window_3,3 (trzy napisy)
+gemini_context_window_4,4 (cztery napisy)
+gemini_context_window_5,5 (pięć napisów)
+openai_api_key_label,Klucz API OpenAI:
+openai_context_window_label,Okno kontekstu:
+openai_context_window_0,0 (brak)
+openai_context_window_1,1 (ostatni napis)
+openai_context_window_2,2 (dwa napisy)
+openai_context_window_3,3 (trzy napisy)
+openai_context_window_4,4 (cztery napisy)
+openai_context_window_5,5 (pięć napisów)
+deepl_classic_model,Klasyczna
+deepl_nextgen_model,Nowej generacji
+deepl_context_window_label,Okno kontekstu:
+deepl_context_window_0,0 (brak)
+deepl_context_window_1,1 (ostatni napis)
+deepl_context_window_2,2 (dwa napisy)
+deepl_context_window_3,3 (trzy napisy)
+models_file_label,Lista modeli MarianMT:
+beam_size_label,Rozmiar wiązki tłumaczenia (MarianMT):
+tesseract_path_label,Ścieżka do Tesseract:
+scan_interval_label,Interwał skanowania (ms):
+clear_timeout_label,Czas wyświetlania tłumaczenia (s):
+stability_threshold_label,Próg stabilności tekstu:
+confidence_threshold_label,Próg pewności OCR:
+preprocessing_mode_label,Tryb przetwarzania obrazu:
+ocr_debugging_label,Debugowanie OCR:
+show_debug_checkbox,Pokaż wyniki OCR
+preview_btn,Podgląd
+adaptive_block_size_label,"Rozmiar bloku (3-101, nieparzysty)":
+adaptive_c_label,"Wartość C (-75 do 75)":
+remove_trailing_label,Usuń śmieci na końcu:
+remove_trailing_checkbox,Tłumacz do ostatniego znaku interpunkcyjnego
+source_color_label,Kolor obszaru źródłowego:
+target_color_label,Kolor obszaru tłumaczenia:
+target_text_color_label,Kolor tekstu tłumaczenia:
+font_size_label,Rozmiar czcionki okna tłumaczenia:
+font_type_label,Typ czcionki okna tłumaczenia:
+opacity_label,Nieprzezroczystość:
+opacity_background_label,Tło:
+opacity_text_label,Tekst:
+file_cache_frame_title,Opcje buforowania do plików
+file_cache_description,"Buforowanie do plików zapisuje tłumaczenia na dysk, aby zmniejszyć koszty API i poprawić wydajność."
+google_cache_checkbox,"Włącz bufor Google Translate (zapisuje na dysk, zmniejsza wywołania API)"
+deepl_cache_checkbox,"Włącz bufor DeepL (zapisuje na dysk, zmniejsza wywołania API)"
+gemini_file_cache_checkbox,"Włącz bufor Gemini (zapisuje na dysk, zmniejsza wywołania API)"
+openai_file_cache_checkbox,"Włącz bufor OpenAI (zapisuje na dysk, zmniejsza wywołania API)"
+cache_files_label,Pliki buforów:
+clear_caches_btn,Wyczyść pliki buforów
+save_settings_btn,Zapisz ustawienia
+browse_btn,Wskaż
+choose_color_btn,Wybierz kolor
+debug_tab_title,Debugowanie
+original_image_label,Obraz oryginalny
+processed_image_label,Obraz przetworzony
+ocr_results_label,Wyniki OCR programu Tesseract
+ocr_results_placeholder,Wyniki OCR pojawią się tutaj po włączeniu tłumaczenia i wybraniu Tesseract jako modelu OCR.
+app_log_label,Dziennik aplikacji
+save_debug_images_btn,Zapisz obrazy OCR
+refresh_log_btn,Odśwież dziennik
+preprocessing_none,Brak
+preprocessing_binary,Binarny
+preprocessing_binary_inv,Binarny odwrócony
+preprocessing_adaptive,Adaptacyjny
+about_tab_title,Informacje
+settings_saved,Status: Ustawienia zapisane
+no_image_captured,Nie przechwycono jeszcze obrazu
+no_image_processed,Nie przetworzono jeszcze obrazu
+marian_beam_explanation,"Wyższe wartości wiązki = lepsze, ale wolniejsze tłumaczenia"
+marian_quality_note,"Uwaga: MarianMT zapewnia wysoką jakość tłumaczeń dla wielu"
+marian_quality_vary,"par językowych. Jakość może się różnić w zależności od języka."
+marian_download_note,"Modele są pobierane przy pierwszym użyciu (wymaga Internetu)."
+marian_unavailable_line1,"MarianMT nie jest dostępny. Aby włączyć, zainstaluj:"
+marian_unavailable_line2,"pip install transformers torch sentencepiece"
+browse_marian_models_title,Wybierz plik CSV modeli MarianMT
+browse_tesseract_title,Wybierz plik tesseract.exe
+choose_source_color_title,Wybierz kolor obszaru źródłowego
+choose_target_color_title,Wybierz kolor obszaru tłumaczenia
+choose_target_text_color_title,Wybierz kolor tekstu tłumaczenia
+dialog_area_selected_title,Obszar wybrany
+dialog_source_area_set_message,Obszar źródłowy ustawiony na:
+dialog_target_area_set_message,Obszar docelowy ustawiony na:
+dialog_debug_images_saved_title,Obrazy OCR zapisane
+dialog_debug_images_saved_message,Obrazy zapisane do '{0}'.
+dialog_debug_image_saved_title,Obraz OCR zapisany
+dialog_debug_image_saved_message,Obraz oryginalny zapisany do '{0}'. Brak przetworzonego obrazu.
+ocr_preview_title,Podgląd OCR
+processed_image_preview,Przetworzony obraz (skala 1:1)
+recognized_text_preview,Rozpoznany tekst
+refresh_preview,Odśwież podgląd
+close_btn,Zamknij
+no_text_recognized,Nie rozpoznano tekstu
+no_image_for_ocr,Brak obrazu dla OCR
+gemini_total_words_label,Łącznie słów
+gemini_total_cost_label,Łączny koszt
+gemini_enable_api_log_checkbox,Włącz rejestr API
+gemini_reset_log_button,Wyzeruj
+gemini_refresh_stats_button,Odśwież
+deepl_usage_label,Darmowy miesięczny limit
+deepl_usage_loading,Ładowanie...
+api_usage_tab_title,Zużycie API
+api_usage_section_gemini_ocr,📊 Statystyki OCR Gemini
+api_usage_section_gemini_translation,🔄 Statystyki tłumaczenia Gemini
+api_usage_section_gemini_combined,💰 Łączne statystyki Gemini
+api_usage_section_openai_ocr,📊 Statystyki OCR OpenAI
+api_usage_section_openai_translation,🔄 Statystyki tłumaczenia OpenAI
+api_usage_section_openai_combined,💰 Łączne statystyki OpenAI
+api_usage_section_deepl,📈 Monitor zużycia DeepL
+api_usage_total_ocr_calls,Łączne wywołania OCR:
+api_usage_median_duration_ocr,Mediana czasu trwania:
+api_usage_avg_cost_per_call,Średni koszt na wywołanie:
+api_usage_avg_cost_per_minute,Średni koszt na minutę:
+api_usage_avg_cost_per_hour,Średni koszt na godzinę:
+api_usage_total_ocr_cost,Łączny koszt OCR:
+api_usage_total_translation_calls,Łączne wywołania tłumaczenia:
+api_usage_total_words_translated,Łącznie słów przetłumaczonych:
+api_usage_median_duration_translation,Mediana czasu trwania:
+api_usage_words_per_minute,Średnia słów na minutę:
+api_usage_avg_cost_per_word,Średni koszt na słowo:
+api_usage_total_translation_cost,Łączny koszt tłumaczenia:
+api_usage_combined_cost_per_minute,Łączny koszt na minutę:
+api_usage_combined_cost_per_hour,Łączny koszt na godzinę:
+api_usage_total_api_cost,Łączny koszt API:
+api_usage_refresh_btn,Odśwież statystyki
+api_usage_export_csv_btn,Eksportuj do CSV
+api_usage_export_text_btn,Eksportuj do tekstu
+api_usage_copy_btn,Kopiuj
+api_usage_no_data,Brak dostępnych danych
+api_usage_info_note,"ℹ️ Uwaga: statystyki te są oparte na plikach skróconych dzienników (Short_Log). W razie usunięcia lub wyczyszczenia tych plików statystyki zostaną zresetowane. Monitorowanie szacunkowych kosztów ma charakter wyłącznie poglądowy. Użytkownik sam odpowiada za monitorowanie wykorzystania i kosztów API poszczególnych dostawców."
+check_for_updates_btn,Sprawdź dostępność aktualizacji
+check_for_updates_on_startup,Sprawdź dostępność aktualizacji przy uruchomieniu
+check_updates_title,Sprawdzanie aktualizacji
+check_updates_msg,Sprawdzanie aktualizacji...
+update_available_title,Aktualizacja dostępna
+update_available_msg_start,Nowa wersja {0} jest dostępna!
+update_available_current_version,Aktualna wersja: {0}
+update_available_new_version,Nowa wersja: {0}
+update_available_file_size,Rozmiar pliku: {0}
+update_available_release_notes,Informacje o wydaniu:
+update_available_question,Czy chcesz pobrać i zainstalować aktualizację?
+no_updates_title,Brak aktualizacji
+no_updates_msg,Masz najnowszą wersję!
+update_error_title,Błąd aktualizacji
+update_error_msg,Nie można sprawdzić aktualizacji:
+download_update_title,Pobieranie aktualizacji
+download_update_msg,Pobieranie aktualizacji...
+download_progress_format,{0} MB z {1} MB ({2}%)
+download_error_title,Błąd pobierania
+download_error_msg,Nie udało się pobrać aktualizacji. Spróbuj ponownie później.
+download_error_detail,Błąd podczas pobierania aktualizacji:
+apply_update_title,Zastosuj aktualizację
+apply_update_msg,Aktualizacja została pobrana pomyślnie!
+apply_update_detail,Aplikacja zostanie zamknięta i automatycznie uruchomiona ponownie w nowej wersji.
+apply_update_continue,"Kliknij OK, aby kontynuować."
+applying_update_title,Instalacja aktualizacji
+applying_update_msg,Instalowanie aktualizacji...
+applying_update_restart,Aplikacja zostanie automatycznie uruchomiona ponownie.
+update_apply_error_title,Błąd aktualizacji
+update_apply_error_msg,Nie udało się zastosować aktualizacji.
+update_apply_error_detail,"Spróbuj ponownie lub uruchom aplikację ponownie, aby zastosować aktualizację."
+update_apply_error_exception,Wystąpił błąd podczas stosowania aktualizacji:
+update_apply_error_restart,"Uruchom aplikację ponownie, aby zastosować aktualizację."
+stats_copied_title,Skopiowano
+stats_copied_msg,Statystyki zostały skopiowane do schowka.
+stats_copy_error,Błąd podczas kopiowania do schowka.
+deepl_usage_unavailable,Nie można pobrać danych użycia
+deepl_usage_error,Błąd podczas pobierania danych użycia
+export_success_title,Eksport pomyślny
+export_success_msg,Statystyki wyeksportowane do:
+export_failed_title,Eksport nieudany
+export_csv_failed_msg,Nie udało się wyeksportować statystyk do CSV.
+export_text_failed_msg,Nie udało się wyeksportować statystyk do tekstu.
+export_error_title,Błąd eksportu
+export_error_msg,Błąd podczas eksportowania statystyk:
+gemini_reset_success_title,Sukces
+gemini_reset_success_msg,Dziennik API Gemini został zresetowany.
+gemini_reset_warning_title,Ostrzeżenie
+gemini_reset_warning_msg,Plik dziennika API Gemini nie istnieje.
+gemini_reset_error_title,Błąd
+gemini_reset_error_msg,Nie można uzyskać dostępu do pliku dziennika Gemini.
+gemini_reset_error_failed,Nie udało się zresetować dziennika API Gemini:
+stats_clipboard_header,Game-Changing Translator - Statystyki użycia API
+stats_section_ocr_header,📊 Statystyki Gemini OCR
+stats_section_translation_header,🔄 Statystyki tłumaczenia Gemini
+stats_section_combined_header,💰 Łączne statystyki API
+stats_section_deepl_header,📈 Monitor użycia DeepL
+stats_deepl_free_limit,Darmowy miesięczny limit:
+stats_not_available,Niedostępne
+stats_cost_per_min_suffix,/min
+stats_cost_per_hr_suffix,/godz
+stats_duration_suffix,s
+currency_usd, USD
+mb_progress_of, MB z 
+mb_progress_format, MB ({0}%)
+export_csv_dialog_title,Eksportuj statystyki do CSV
+export_text_dialog_title,Eksportuj statystyki do tekstu
+file_type_csv,Pliki CSV
+file_type_text,Pliki tekstowe
+file_type_all,Wszystkie pliki
+csv_header_provider,Dostawca
+csv_header_type,Typ
+csv_header_metric,Wskaźnik
+csv_header_value,Wartość
+csv_metric_free_monthly_limit,Darmowy miesięczny limit
+stats_text_total_ocr_calls,Łączne wywołania OCR
+stats_text_median_duration,Mediana czasu trwania
+stats_text_avg_cost_per_call,Średni koszt na wywołanie
+stats_text_avg_cost_per_minute,Średni koszt na minutę
+stats_text_avg_cost_per_hour,Średni koszt na godzinę
+stats_text_total_ocr_cost,Łączny koszt OCR
+stats_text_total_trans_calls,Łączne wywołania tłumaczenia
+stats_text_total_words,Łącznie słów przetłumaczonych
+stats_text_words_per_minute,Średnia słów na minutę
+stats_text_avg_cost_per_word,Średni koszt na słowo
+stats_text_total_trans_cost,Łączny koszt tłumaczenia
+stats_text_total_api_cost,Łączny koszt API
+stats_text_combined_cost_per_minute,Łączny koszt na minutę
+stats_text_combined_cost_per_hour,Łączny koszt na godzinę
+stats_text_ocr_header_gemini,📊 Statystyki OCR Gemini
+stats_text_trans_header_gemini,🔄 Statystyki tłumaczenia Gemini
+stats_text_combined_header_gemini,💰 Łączne statystyki Gemini
+stats_text_ocr_header_openai,📊 Statystyki OCR OpenAI
+stats_text_trans_header_openai,🔄 Statystyki tłumaczenia OpenAI
+stats_text_combined_header_openai,💰 Łączne statystyki OpenAI
+stats_text_deepl_header,📈 Monitor użycia DeepL
+stats_report_generated,Raport wygenerowany:

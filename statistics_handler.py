@@ -1,0 +1,1407 @@
+import os
+import re
+import time
+from datetime import datetime
+from logger import log_debug
+
+
+class StatisticsHandler:
+    """Handles parsing API usage logs and calculating statistics for cost monitoring."""
+
+    def __init__(self, app):
+        self.app = app
+
+        import sys
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))
+            )
+
+        self.gemini_ocr_log_file = os.path.join(
+            base_dir, "Gemini_OCR_Short_Log.txt"
+        )
+        self.gemini_translation_log_file = os.path.join(
+            base_dir, "Gemini_Translation_Short_Log.txt"
+        )
+        self.openai_ocr_log_file = os.path.join(
+            base_dir, "OpenAI_OCR_Short_Log.txt"
+        )
+        self.openai_translation_log_file = os.path.join(
+            base_dir, "OpenAI_Translation_Short_Log.txt"
+        )
+
+        log_debug(
+            "Statistics handler initialized with provider-specific log file paths."
+        )
+
+        self._cache_timestamp = 0
+        self._cached_stats = None
+
+    def parse_log_file(self, file_path):
+        """Parse a short log file and extract session data."""
+        if not os.path.exists(file_path):
+            log_debug(f"Log file not found: {file_path}")
+            return []
+
+        sessions = []
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            session_blocks = re.split(
+                r"SESSION \d+ STARTED",
+                content
+            )
+
+            for block in session_blocks[1:]:
+                session_data = self._parse_session_block(block)
+
+                if session_data:
+                    sessions.append(session_data)
+
+        except Exception as e:
+            log_debug(
+                f"Error parsing log file {file_path}: {e}"
+            )
+
+        log_debug(
+            f"Parsed {len(sessions)} sessions from "
+            f"{os.path.basename(file_path)}"
+        )
+
+        return sessions
+
+    def _parse_session_block(self, block):
+        """Parse a single session block and extract calls data."""
+        try:
+            start_match = re.search(
+                r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)",
+                block
+            )
+
+            if not start_match:
+                return None
+
+            session_start = start_match.group(1)
+
+            end_match = re.search(
+                r"SESSION \d+ ENDED "
+                r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)",
+                block
+            )
+
+            if not end_match:
+                return None
+
+            session_end = end_match.group(1)
+
+            try:
+                start_time = datetime.strptime(
+                    session_start,
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )
+
+                end_time = datetime.strptime(
+                    session_end,
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )
+
+                duration_seconds = (
+                    end_time - start_time
+                ).total_seconds()
+
+            except ValueError:
+                duration_seconds = 0
+
+            calls = []
+
+            ocr_calls = re.finditer(
+                r"========= OCR CALL ===========.*?"
+                r"Result:\s*-+\s*(.*?)\s*-+",
+                block,
+                re.DOTALL
+            )
+
+            for call_match in ocr_calls:
+                call_data = self._parse_call_data(
+                    call_match.group(0)
+                )
+
+                if call_data:
+                    call_data["type"] = "ocr"
+                    calls.append(call_data)
+
+            trans_calls = re.finditer(
+                r"===== TRANSLATION CALL =======.*?"
+                r"Result:\s*-+\s*(.*?)\s*-+",
+                block,
+                re.DOTALL
+            )
+
+            for call_match in trans_calls:
+                call_data = self._parse_call_data(
+                    call_match.group(0)
+                )
+
+                if call_data:
+                    call_data["type"] = "translation"
+
+                    result_text = call_match.group(1)
+
+                    call_data["word_count"] = (
+                        self._count_words_in_translation(
+                            result_text
+                        )
+                    )
+
+                    calls.append(call_data)
+
+            return {
+                "start_time": session_start,
+                "end_time": session_end,
+                "duration_seconds": duration_seconds,
+                "calls": calls,
+            }
+
+        except Exception as e:
+            log_debug(
+                f"Error parsing session block: {e}"
+            )
+            return None
+
+    def _parse_call_data(self, call_text):
+        """Parse individual call data from call block."""
+        try:
+            duration_match = re.search(
+                r"Duration: ([\d\.]+)s",
+                call_text
+            )
+
+            duration = (
+                float(duration_match.group(1))
+                if duration_match
+                else 0.0
+            )
+
+            cost_match = re.search(
+                r"Cost: \$([0-9\.]+)",
+                call_text
+            )
+
+            cost = (
+                float(cost_match.group(1))
+                if cost_match
+                else 0.0
+            )
+
+            return {
+                "duration": duration,
+                "cost": cost,
+            }
+
+        except Exception as e:
+            log_debug(
+                f"Error parsing call data: {e}"
+            )
+            return None
+
+    def _count_words_in_translation(self, result_text):
+        """Count words in translation result text."""
+        try:
+            lines = result_text.strip().split("\n")
+
+            target_text = ""
+
+            for line in lines:
+                if ":" in line and len(
+                    line.split(":", 1)
+                ) > 1:
+
+                    potential_target = (
+                        line.split(":", 1)[1].strip()
+                    )
+
+                    if (
+                        potential_target
+                        and potential_target != "<EMPTY>"
+                    ):
+                        target_text = potential_target
+                        break
+
+            if not target_text:
+                return 0
+
+            words = target_text.split()
+
+            return len(words)
+
+        except Exception as e:
+            log_debug(
+                f"Error counting words: {e}"
+            )
+            return 0
+
+    def get_statistics(self):
+        """Get comprehensive API usage statistics, separated by provider."""
+        if (
+            self._cached_stats
+            and (time.time() - self._cache_timestamp) < 5.0
+        ):
+            return self._cached_stats
+
+        try:
+            gemini_ocr_sessions = self.parse_log_file(
+                self.gemini_ocr_log_file
+            )
+
+            gemini_translation_sessions = self.parse_log_file(
+                self.gemini_translation_log_file
+            )
+
+            openai_ocr_sessions = self.parse_log_file(
+                self.openai_ocr_log_file
+            )
+
+            openai_translation_sessions = self.parse_log_file(
+                self.openai_translation_log_file
+            )
+
+            gemini_ocr_stats = self._calculate_ocr_statistics(
+                gemini_ocr_sessions
+            )
+
+            gemini_translation_stats = (
+                self._calculate_translation_statistics(
+                    gemini_translation_sessions
+                )
+            )
+
+            openai_ocr_stats = self._calculate_ocr_statistics(
+                openai_ocr_sessions
+            )
+
+            openai_translation_stats = (
+                self._calculate_translation_statistics(
+                    openai_translation_sessions
+                )
+            )
+
+            gemini_combined_stats = (
+                self._calculate_combined_statistics(
+                    gemini_ocr_stats,
+                    gemini_translation_stats
+                )
+            )
+
+            openai_combined_stats = (
+                self._calculate_combined_statistics(
+                    openai_ocr_stats,
+                    openai_translation_stats
+                )
+            )
+
+            stats = {
+                "gemini_ocr": gemini_ocr_stats,
+                "gemini_translation": gemini_translation_stats,
+                "gemini_combined": gemini_combined_stats,
+                "openai_ocr": openai_ocr_stats,
+                "openai_translation": openai_translation_stats,
+                "openai_combined": openai_combined_stats,
+            }
+
+            self._cached_stats = stats
+            self._cache_timestamp = time.time()
+
+            return stats
+
+        except Exception as e:
+            log_debug(
+                f"Error calculating statistics: {e}"
+            )
+            return self._get_empty_statistics()
+
+    def _calculate_ocr_statistics(self, sessions):
+        """Calculate OCR-specific statistics."""
+        total_cost = 0.0
+        total_calls = 0
+        total_duration = 0.0
+        call_durations = []
+
+        for session in sessions:
+            for call in session["calls"]:
+                if call.get("type") == "ocr":
+                    total_cost += call.get("cost", 0.0)
+                    total_calls += 1
+
+                    duration = call.get(
+                        "duration",
+                        0.0
+                    )
+
+                    call_durations.append(duration)
+
+            total_duration += session.get(
+                "duration_seconds",
+                0.0
+            )
+
+        median_duration = 0.0
+
+        if call_durations:
+            call_durations.sort()
+            n = len(call_durations)
+
+            if n % 2 == 0:
+                median_duration = (
+                    call_durations[n // 2 - 1]
+                    + call_durations[n // 2]
+                ) / 2.0
+            else:
+                median_duration = call_durations[n // 2]
+
+        avg_cost_per_call = (
+            total_cost / total_calls
+            if total_calls > 0
+            else 0.0
+        )
+
+        avg_cost_per_minute = (
+            total_cost / (total_duration / 60.0)
+            if total_duration > 0
+            else 0.0
+        )
+
+        avg_cost_per_minute_rounded = round(
+            avg_cost_per_minute,
+            8
+        )
+
+        avg_cost_per_hour = (
+            avg_cost_per_minute_rounded * 60.0
+        )
+
+        return {
+            "total_cost": total_cost,
+            "total_calls": total_calls,
+            "median_duration": median_duration,
+            "avg_cost_per_call": avg_cost_per_call,
+            "avg_cost_per_minute": avg_cost_per_minute,
+            "avg_cost_per_hour": avg_cost_per_hour,
+            "total_duration_seconds": total_duration,
+        }
+
+    def _calculate_translation_statistics(self, sessions):
+        """Calculate translation-specific statistics."""
+        total_cost = 0.0
+        total_calls = 0
+        total_words = 0
+        total_duration = 0.0
+        call_durations = []
+
+        for session in sessions:
+            for call in session["calls"]:
+                if call.get("type") == "translation":
+                    total_cost += call.get(
+                        "cost",
+                        0.0
+                    )
+
+                    total_calls += 1
+
+                    total_words += call.get(
+                        "word_count",
+                        0
+                    )
+
+                    duration = call.get(
+                        "duration",
+                        0.0
+                    )
+
+                    call_durations.append(duration)
+
+            total_duration += session.get(
+                "duration_seconds",
+                0.0
+            )
+
+        median_duration = 0.0
+
+        if call_durations:
+            call_durations.sort()
+            n = len(call_durations)
+
+            if n % 2 == 0:
+                median_duration = (
+                    call_durations[n // 2 - 1]
+                    + call_durations[n // 2]
+                ) / 2.0
+            else:
+                median_duration = call_durations[n // 2]
+
+        avg_cost_per_word = (
+            total_cost / total_words
+            if total_words > 0
+            else 0.0
+        )
+
+        avg_cost_per_call = (
+            total_cost / total_calls
+            if total_calls > 0
+            else 0.0
+        )
+
+        avg_cost_per_minute = (
+            total_cost / (total_duration / 60.0)
+            if total_duration > 0
+            else 0.0
+        )
+
+        avg_cost_per_minute_rounded = round(
+            avg_cost_per_minute,
+            8
+        )
+
+        avg_cost_per_hour = (
+            avg_cost_per_minute_rounded * 60.0
+        )
+
+        words_per_minute = (
+            total_words / (total_duration / 60.0)
+            if total_duration > 0
+            else 0.0
+        )
+
+        return {
+            "total_cost": total_cost,
+            "total_calls": total_calls,
+            "total_words": total_words,
+            "median_duration": median_duration,
+            "avg_cost_per_word": avg_cost_per_word,
+            "avg_cost_per_call": avg_cost_per_call,
+            "avg_cost_per_minute": avg_cost_per_minute,
+            "avg_cost_per_hour": avg_cost_per_hour,
+            "words_per_minute": words_per_minute,
+            "total_duration_seconds": total_duration,
+        }
+
+    def _calculate_combined_statistics(
+        self,
+        ocr_stats,
+        translation_stats
+    ):
+        """Calculate combined OCR + Translation statistics."""
+        total_cost = (
+            ocr_stats["total_cost"]
+            + translation_stats["total_cost"]
+        )
+
+        combined_cost_per_minute = (
+            ocr_stats["avg_cost_per_minute"]
+            + translation_stats["avg_cost_per_minute"]
+        )
+
+        combined_cost_per_minute_rounded = round(
+            combined_cost_per_minute,
+            8
+        )
+
+        combined_cost_per_hour = (
+            ocr_stats["avg_cost_per_hour"]
+            + translation_stats["avg_cost_per_hour"]
+        )
+
+        combined_cost_per_hour_rounded = round(
+            combined_cost_per_hour,
+            8
+        )
+
+        return {
+            "total_cost": total_cost,
+            "combined_cost_per_minute":
+                combined_cost_per_minute_rounded,
+            "combined_cost_per_hour":
+                combined_cost_per_hour_rounded,
+        }
+
+    def _get_empty_statistics(self):
+        """Return empty statistics structure."""
+        empty_ocr = {
+            "total_cost": 0.0,
+            "total_calls": 0,
+            "median_duration": 0.0,
+            "avg_cost_per_call": 0.0,
+            "avg_cost_per_minute": 0.0,
+            "avg_cost_per_hour": 0.0,
+            "total_duration_seconds": 0.0,
+        }
+
+        empty_trans = {
+            "total_cost": 0.0,
+            "total_calls": 0,
+            "total_words": 0,
+            "median_duration": 0.0,
+            "avg_cost_per_word": 0.0,
+            "avg_cost_per_call": 0.0,
+            "avg_cost_per_minute": 0.0,
+            "avg_cost_per_hour": 0.0,
+            "words_per_minute": 0.0,
+            "total_duration_seconds": 0.0,
+        }
+
+        empty_combined = {
+            "total_cost": 0.0,
+            "combined_cost_per_minute": 0.0,
+            "combined_cost_per_hour": 0.0,
+        }
+
+        return {
+            "gemini_ocr": empty_ocr.copy(),
+            "gemini_translation": empty_trans.copy(),
+            "gemini_combined": empty_combined.copy(),
+            "openai_ocr": empty_ocr.copy(),
+            "openai_translation": empty_trans.copy(),
+            "openai_combined": empty_combined.copy(),
+        }
+
+    def _format_currency_for_export(
+        self,
+        amount,
+        use_polish_format=False
+    ):
+        """Format currency for export files."""
+        try:
+            if use_polish_format:
+                amount_str = f"{amount:.8f}".replace(
+                    ".",
+                    ","
+                )
+                return f"{amount_str} USD"
+
+            return f"${amount:.8f}"
+
+        except Exception as e:
+            log_debug(
+                f"Error formatting currency for export: {e}"
+            )
+            return f"${amount:.8f}"
+
+    def _format_number_with_separators_for_export(
+        self,
+        number,
+        use_polish_format=False
+    ):
+        """Format integer numbers with thousand separators."""
+        try:
+            num = int(number)
+
+            if use_polish_format:
+                return f"{num:,}".replace(
+                    ",",
+                    " "
+                )
+
+            return f"{num:,}"
+
+        except Exception as e:
+            log_debug(
+                f"Error formatting number with separators for export: {e}"
+            )
+            return str(number)
+
+    def export_statistics_csv(
+        self,
+        file_path,
+        ui_lang=None,
+        deepl_usage=None
+    ):
+        """Export statistics to CSV format."""
+        try:
+            stats = self.get_statistics()
+
+            use_polish_format = (
+                ui_lang
+                and hasattr(ui_lang, "current_lang")
+                and ui_lang.current_lang == "pol"
+            )
+
+            with open(
+                file_path,
+                "w",
+                encoding="utf-8-sig",
+                newline=""
+            ) as f:
+
+                import csv
+
+                headers = [
+                    ui_lang.get_label(
+                        "csv_header_provider",
+                        "Provider"
+                    ) if ui_lang else "Provider",
+
+                    ui_lang.get_label(
+                        "csv_header_type",
+                        "Type"
+                    ) if ui_lang else "Type",
+
+                    ui_lang.get_label(
+                        "csv_header_metric",
+                        "Metric"
+                    ) if ui_lang else "Metric",
+
+                    ui_lang.get_label(
+                        "csv_header_value",
+                        "Value"
+                    ) if ui_lang else "Value",
+                ]
+
+                writer = csv.writer(f)
+                writer.writerow(headers)
+
+                self._write_csv_section(
+                    writer,
+                    "Gemini",
+                    "Translation",
+                    stats["gemini_translation"],
+                    use_polish_format
+                )
+
+                self._write_csv_section(
+                    writer,
+                    "Gemini",
+                    "OCR",
+                    stats["gemini_ocr"],
+                    use_polish_format
+                )
+
+                self._write_csv_section(
+                    writer,
+                    "Gemini",
+                    "Combined",
+                    stats["gemini_combined"],
+                    use_polish_format
+                )
+
+                self._write_csv_section(
+                    writer,
+                    "OpenAI",
+                    "Translation",
+                    stats["openai_translation"],
+                    use_polish_format
+                )
+
+                self._write_csv_section(
+                    writer,
+                    "OpenAI",
+                    "OCR",
+                    stats["openai_ocr"],
+                    use_polish_format
+                )
+
+                self._write_csv_section(
+                    writer,
+                    "OpenAI",
+                    "Combined",
+                    stats["openai_combined"],
+                    use_polish_format
+                )
+
+                deepl_value = (
+                    deepl_usage
+                    if deepl_usage
+                    else "N/A"
+                )
+
+                free_limit_label = (
+                    ui_lang.get_label(
+                        "csv_metric_free_monthly_limit",
+                        "Free Monthly Limit"
+                    )
+                    if ui_lang
+                    else "Free Monthly Limit"
+                )
+
+                writer.writerow([
+                    "DeepL",
+                    "Usage",
+                    free_limit_label,
+                    deepl_value
+                ])
+
+            log_debug(
+                f"Statistics exported to CSV: {file_path}"
+            )
+
+            return True
+
+        except Exception as e:
+            log_debug(
+                f"Error exporting statistics to CSV: {e}"
+            )
+            return False
+
+    def _write_csv_section(
+        self,
+        writer,
+        provider,
+        type,
+        data,
+        use_polish_format
+    ):
+        """Helper to write a section to CSV."""
+        for key, value in data.items():
+            metric_name = key.replace(
+                "_",
+                " "
+            ).title()
+
+            formatted_value = value
+
+            if "cost" in key:
+                formatted_value = (
+                    self._format_currency_for_export(
+                        value,
+                        use_polish_format
+                    )
+                )
+
+            elif "calls" in key or "words" in key:
+                formatted_value = (
+                    self._format_number_with_separators_for_export(
+                        value,
+                        use_polish_format
+                    )
+                )
+
+            elif "duration" in key:
+                formatted_value = (
+                    f"{value:.3f}s".replace(".", ",")
+                    if use_polish_format
+                    else f"{value:.3f}s"
+                )
+
+            elif (
+                "per_minute" in key
+                and "cost" not in key
+            ):
+                formatted_value = (
+                    f"{value:.2f}".replace(".", ",")
+                    if use_polish_format
+                    else f"{value:.2f}"
+                )
+
+            writer.writerow([
+                provider,
+                type,
+                metric_name,
+                formatted_value
+            ])
+
+    def export_statistics_text(
+        self,
+        file_path,
+        ui_lang=None,
+        deepl_usage=None
+    ):
+        """Export statistics to text summary format."""
+        try:
+            report_content = self._generate_text_report(
+                ui_lang,
+                deepl_usage
+            )
+
+            with open(
+                file_path,
+                "w",
+                encoding="utf-8-sig"
+            ) as f:
+                f.write(report_content)
+
+            log_debug(
+                f"Statistics exported to text: {file_path}"
+            )
+
+            return True
+
+        except Exception as e:
+            log_debug(
+                f"Error exporting statistics to text: {e}"
+            )
+            return False
+
+    def _generate_text_report(
+        self,
+        ui_lang=None,
+        deepl_usage=None
+    ):
+        """Generate the full text report as a string."""
+        from io import StringIO
+
+        string_buffer = StringIO()
+
+        stats = self.get_statistics()
+
+        use_polish_format = (
+            ui_lang
+            and hasattr(ui_lang, "current_lang")
+            and ui_lang.current_lang == "pol"
+        )
+
+        header = (
+            ui_lang.get_label(
+                "stats_clipboard_header",
+                "Game-Changing Translator - API Usage Statistics"
+            )
+            if ui_lang
+            else "Game-Changing Translator - API Usage Statistics"
+        )
+
+        string_buffer.write(
+            f"{header}\n"
+        )
+
+        string_buffer.write(
+            "=" * 50 + "\n\n"
+        )
+
+        self._write_text_section(
+            string_buffer,
+            "Gemini",
+            stats,
+            ui_lang,
+            use_polish_format
+        )
+
+        self._write_text_section(
+            string_buffer,
+            "OpenAI",
+            stats,
+            ui_lang,
+            use_polish_format
+        )
+
+        deepl_header = (
+            ui_lang.get_label(
+                "stats_text_deepl_header",
+                "📈 DeepL Usage Monitor"
+            )
+            if ui_lang
+            else "📈 DeepL Usage Monitor"
+        )
+
+        string_buffer.write(
+            f"{deepl_header}\n"
+        )
+
+        string_buffer.write(
+            "-" * 25 + "\n"
+        )
+
+        deepl_value = (
+            deepl_usage
+            if deepl_usage
+            else (
+                ui_lang.get_label(
+                    "stats_not_available",
+                    "N/A"
+                )
+                if ui_lang
+                else "N/A"
+            )
+        )
+
+        free_limit_label = (
+            ui_lang.get_label(
+                "stats_deepl_free_limit",
+                "Free Monthly Limit:"
+            )
+            if ui_lang
+            else "Free Monthly Limit:"
+        )
+
+        string_buffer.write(
+            f"{free_limit_label} {deepl_value}\n\n"
+        )
+
+        report_gen_label = (
+            ui_lang.get_label(
+                "stats_report_generated",
+                "Report generated:"
+            )
+            if ui_lang
+            else "Report generated:"
+        )
+
+        string_buffer.write(
+            f"{report_gen_label} "
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
+
+        content = string_buffer.getvalue()
+
+        string_buffer.close()
+
+        return content
+
+    def _write_text_section(
+        self,
+        f,
+        provider,
+        stats,
+        ui_lang,
+        use_polish_format
+    ):
+        """Helper to write a provider's section to the text buffer."""
+
+        provider_lower = provider.lower()
+
+        ocr_stats = stats[
+            f"{provider_lower}_ocr"
+        ]
+
+        trans_stats = stats[
+            f"{provider_lower}_translation"
+        ]
+
+        combined_stats = stats[
+            f"{provider_lower}_combined"
+        ]
+
+        # =================================================
+        # COMMON LABELS
+        # =================================================
+
+        median_duration_label = (
+            ui_lang.get_label(
+                "stats_text_median_duration",
+                "Median Duration"
+            )
+            if ui_lang
+            else "Median Duration"
+        )
+
+        duration_suffix = (
+            ui_lang.get_label(
+                "stats_duration_suffix",
+                "s"
+            )
+            if ui_lang
+            else "s"
+        )
+
+        avg_cost_per_call_label = (
+            ui_lang.get_label(
+                "stats_text_avg_cost_per_call",
+                "Average Cost per Call"
+            )
+            if ui_lang
+            else "Average Cost per Call"
+        )
+
+        avg_cost_per_minute_label = (
+            ui_lang.get_label(
+                "stats_text_avg_cost_per_minute",
+                "Average Cost per Minute"
+            )
+            if ui_lang
+            else "Average Cost per Minute"
+        )
+
+        avg_cost_per_hour_label = (
+            ui_lang.get_label(
+                "stats_text_avg_cost_per_hour",
+                "Average Cost per Hour"
+            )
+            if ui_lang
+            else "Average Cost per Hour"
+        )
+
+        per_min_suffix = (
+            ui_lang.get_label(
+                "stats_cost_per_min_suffix",
+                "/min"
+            )
+            if ui_lang
+            else "/min"
+        )
+
+        per_hr_suffix = (
+            ui_lang.get_label(
+                "stats_cost_per_hr_suffix",
+                "/hr"
+            )
+            if ui_lang
+            else "/hr"
+        )
+
+        # =================================================
+        # OCR SECTION
+        # =================================================
+
+        ocr_header = (
+            ui_lang.get_label(
+                f"stats_text_ocr_header_{provider_lower}",
+                f"📊 {provider} OCR Statistics"
+            )
+            if ui_lang
+            else f"📊 {provider} OCR Statistics"
+        )
+
+        f.write(f"{ocr_header}\n")
+        f.write("-" * len(ocr_header) + "\n")
+
+        total_ocr_calls_label = (
+            ui_lang.get_label(
+                "stats_text_total_ocr_calls",
+                "Total OCR Calls"
+            )
+            if ui_lang
+            else "Total OCR Calls"
+        )
+
+        total_ocr_calls = (
+            self._format_number_with_separators_for_export(
+                ocr_stats["total_calls"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{total_ocr_calls_label}: "
+            f"{total_ocr_calls}\n"
+        )
+
+        ocr_duration_value = (
+            f"{ocr_stats['median_duration']:.3f}"
+            f"{duration_suffix}"
+        )
+
+        if use_polish_format:
+            ocr_duration_value = (
+                ocr_duration_value.replace(".", ",")
+            )
+
+        f.write(
+            f"{median_duration_label}: "
+            f"{ocr_duration_value}\n"
+        )
+
+        ocr_avg_call_cost = (
+            self._format_currency_for_export(
+                ocr_stats["avg_cost_per_call"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_call_label}: "
+            f"{ocr_avg_call_cost}\n"
+        )
+
+        ocr_avg_minute_cost = (
+            self._format_currency_for_export(
+                ocr_stats["avg_cost_per_minute"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_minute_label}: "
+            f"{ocr_avg_minute_cost}"
+            f"{per_min_suffix}\n"
+        )
+
+        ocr_avg_hour_cost = (
+            self._format_currency_for_export(
+                ocr_stats["avg_cost_per_hour"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_hour_label}: "
+            f"{ocr_avg_hour_cost}"
+            f"{per_hr_suffix}\n"
+        )
+
+        total_ocr_cost_label = (
+            ui_lang.get_label(
+                "stats_text_total_ocr_cost",
+                "Total OCR Cost"
+            )
+            if ui_lang
+            else "Total OCR Cost"
+        )
+
+        total_ocr_cost = (
+            self._format_currency_for_export(
+                ocr_stats["total_cost"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{total_ocr_cost_label}: "
+            f"{total_ocr_cost}\n\n"
+        )
+
+        # =================================================
+        # TRANSLATION SECTION
+        # =================================================
+
+        trans_header = (
+            ui_lang.get_label(
+                f"stats_text_trans_header_{provider_lower}",
+                f"🔄 {provider} Translation Statistics"
+            )
+            if ui_lang
+            else f"🔄 {provider} Translation Statistics"
+        )
+
+        f.write(f"{trans_header}\n")
+        f.write("-" * len(trans_header) + "\n")
+
+        total_trans_calls_label = (
+            ui_lang.get_label(
+                "stats_text_total_trans_calls",
+                "Total Translation Calls"
+            )
+            if ui_lang
+            else "Total Translation Calls"
+        )
+
+        total_trans_calls = (
+            self._format_number_with_separators_for_export(
+                trans_stats["total_calls"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{total_trans_calls_label}: "
+            f"{total_trans_calls}\n"
+        )
+
+        total_words_label = (
+            ui_lang.get_label(
+                "stats_text_total_words",
+                "Total Words Translated"
+            )
+            if ui_lang
+            else "Total Words Translated"
+        )
+
+        total_words = (
+            self._format_number_with_separators_for_export(
+                trans_stats["total_words"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{total_words_label}: "
+            f"{total_words}\n"
+        )
+
+        trans_duration_value = (
+            f"{trans_stats['median_duration']:.3f}"
+            f"{duration_suffix}"
+        )
+
+        if use_polish_format:
+            trans_duration_value = (
+                trans_duration_value.replace(".", ",")
+            )
+
+        f.write(
+            f"{median_duration_label}: "
+            f"{trans_duration_value}\n"
+        )
+
+        words_per_minute_label = (
+            ui_lang.get_label(
+                "stats_text_words_per_minute",
+                "Average Words per Minute"
+            )
+            if ui_lang
+            else "Average Words per Minute"
+        )
+
+        words_per_minute_value = (
+            f"{trans_stats['words_per_minute']:.2f}"
+        )
+
+        if use_polish_format:
+            words_per_minute_value = (
+                words_per_minute_value.replace(".", ",")
+            )
+
+        f.write(
+            f"{words_per_minute_label}: "
+            f"{words_per_minute_value}\n"
+        )
+
+        avg_cost_per_word_label = (
+            ui_lang.get_label(
+                "stats_text_avg_cost_per_word",
+                "Average Cost per Word"
+            )
+            if ui_lang
+            else "Average Cost per Word"
+        )
+
+        trans_avg_word_cost = (
+            self._format_currency_for_export(
+                trans_stats["avg_cost_per_word"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_word_label}: "
+            f"{trans_avg_word_cost}\n"
+        )
+
+        trans_avg_call_cost = (
+            self._format_currency_for_export(
+                trans_stats["avg_cost_per_call"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_call_label}: "
+            f"{trans_avg_call_cost}\n"
+        )
+
+        trans_avg_minute_cost = (
+            self._format_currency_for_export(
+                trans_stats["avg_cost_per_minute"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_minute_label}: "
+            f"{trans_avg_minute_cost}"
+            f"{per_min_suffix}\n"
+        )
+
+        trans_avg_hour_cost = (
+            self._format_currency_for_export(
+                trans_stats["avg_cost_per_hour"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{avg_cost_per_hour_label}: "
+            f"{trans_avg_hour_cost}"
+            f"{per_hr_suffix}\n"
+        )
+
+        total_trans_cost_label = (
+            ui_lang.get_label(
+                "stats_text_total_trans_cost",
+                "Total Translation Cost"
+            )
+            if ui_lang
+            else "Total Translation Cost"
+        )
+
+        total_trans_cost = (
+            self._format_currency_for_export(
+                trans_stats["total_cost"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{total_trans_cost_label}: "
+            f"{total_trans_cost}\n\n"
+        )
+
+        # =================================================
+        # COMBINED SECTION
+        # =================================================
+
+        combined_header = (
+            ui_lang.get_label(
+                f"stats_text_combined_header_{provider_lower}",
+                f"💰 Combined {provider} API Statistics"
+            )
+            if ui_lang
+            else f"💰 Combined {provider} API Statistics"
+        )
+
+        f.write(f"{combined_header}\n")
+        f.write("-" * len(combined_header) + "\n")
+
+        combined_cost_per_minute_label = (
+            ui_lang.get_label(
+                "stats_text_combined_cost_per_minute",
+                "Combined Cost per Minute"
+            )
+            if ui_lang
+            else "Combined Cost per Minute"
+        )
+
+        combined_minute_cost = (
+            self._format_currency_for_export(
+                combined_stats["combined_cost_per_minute"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{combined_cost_per_minute_label}: "
+            f"{combined_minute_cost}"
+            f"{per_min_suffix}\n"
+        )
+
+        combined_cost_per_hour_label = (
+            ui_lang.get_label(
+                "stats_text_combined_cost_per_hour",
+                "Combined Cost per Hour"
+            )
+            if ui_lang
+            else "Combined Cost per Hour"
+        )
+
+        combined_hour_cost = (
+            self._format_currency_for_export(
+                combined_stats["combined_cost_per_hour"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{combined_cost_per_hour_label}: "
+            f"{combined_hour_cost}"
+            f"{per_hr_suffix}\n"
+        )
+
+        total_api_cost_label = (
+            ui_lang.get_label(
+                "stats_text_total_api_cost",
+                "Total API Cost"
+            )
+            if ui_lang
+            else "Total API Cost"
+        )
+
+        total_api_cost = (
+            self._format_currency_for_export(
+                combined_stats["total_cost"],
+                use_polish_format
+            )
+        )
+
+        f.write(
+            f"{total_api_cost_label}: "
+            f"{total_api_cost}\n\n"
+        )
